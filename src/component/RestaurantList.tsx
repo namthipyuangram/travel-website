@@ -1,21 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Search, MapPin } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { Search, MapPin, Utensils } from "lucide-react";
 
-interface Restaurant {
-  id: string;
-  name: string;
-  description: string;
-  location: string;
-  category: string;
-  image_url: string;
-}
+// ... Interface คงเดิม ...
 
 export default function RestaurantList() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // เพิ่มการจัดการ Error
 
   const categories = [
     { value: "", label: "ทั้งหมด", icon: "🍽️" },
@@ -25,139 +20,176 @@ export default function RestaurantList() {
     { value: "อื่นๆ", label: "อื่นๆ", icon: "📍" },
   ];
 
-  const fetchRestaurants = async () => {
+  // ใช้ useCallback เพื่อ memoize ฟังก์ชัน
+  const fetchRestaurants = useCallback(async (searchTerm: string, catTerm: string) => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
-      if (search) params.append("q", search);
-      if (category) params.append("category", category);
+      if (searchTerm) params.append("q", searchTerm);
+      if (catTerm) params.append("category", catTerm);
 
       const res = await fetch(`/api/restaurants?${params.toString()}`);
+      if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
+      
       const data = await res.json();
       setRestaurants(data);
-    } catch (error) {
-      console.error("Error fetching restaurants:", error);
+    } catch (err) {
+      setError("เกิดข้อผิดพลาดในการโหลดข้อมูล กรุณาลองใหม่อีกครั้ง");
+      console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchRestaurants();
-    }, 400); // debounce
+      fetchRestaurants(search, category);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [search, category]);
+  }, [search, category, fetchRestaurants]);
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-sky-50 via-white to-blue-50">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <h1 className="text-4xl font-bold text-sky-700 mb-2 flex items-center gap-3">
-          🍽️ ร้านอาหารแนะนำ
-        </h1>
-        <p className="text-gray-600">ค้นพบร้านอาหารอร่อยๆ ในโคราช</p>
-      </div>
+      <header className="bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-2 flex items-center gap-3">
+            <Utensils className="text-sky-600 w-10 h-10" />
+            ร้านอาหารแนะนำ
+          </h1>
+          <p className="text-slate-500 text-lg">ค้นพบร้านอาหารอร่อยๆ ในโคราช</p>
+        </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search & Filter Section */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* Search & Filter */}
+        <section className="sticky top-4 z-10 bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-slate-200 p-4 mb-8">
           <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search Input */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="ค้นหาชื่อร้าน, ที่อยู่, หรือรายละเอียด..."
+                placeholder="ค้นหาชื่อร้านหรือสถานที่..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-sky-500 focus:outline-none transition"
+                className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-sky-500 transition"
               />
             </div>
-
-            {/* Category Filter */}
-            <div className="flex gap-2 flex-wrap lg:flex-nowrap">
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
               {categories.map((cat) => (
                 <button
                   key={cat.value}
                   onClick={() => setCategory(cat.value)}
-                  className={`px-4 py-3 rounded-xl font-medium transition whitespace-nowrap ${
+                  aria-pressed={category === cat.value}
+                  className={`px-5 py-2.5 rounded-xl font-medium transition flex items-center gap-2 whitespace-nowrap shadow-sm ${
                     category === cat.value
-                      ? "bg-sky-600 text-white shadow-lg"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      ? "bg-sky-600 text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
                   }`}
                 >
-                  {cat.icon} {cat.label}
+                  <span>{cat.icon}</span>
+                  {cat.label}
                 </button>
               ))}
             </div>
           </div>
+        </section>
 
-          {/* Results Count */}
-          <div className="mt-4 text-sm text-gray-600">
-            พบ <span className="font-semibold text-sky-700">{restaurants.length}</span> ร้านอาหาร
-          </div>
-        </div>
-
-        {/* Loading */}
-        {loading && (
-          <div className="text-center py-12">
-            <div className="inline-block w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
-            <p className="mt-4 text-gray-600">กำลังโหลด...</p>
+        {/* Status Messages (Error/Loading/Empty) */}
+        {error && (
+          <div className="text-center py-12 text-red-500 bg-red-50 rounded-2xl border border-red-100">
+            <p>{error}</p>
+            <button onClick={() => fetchRestaurants(search, category)} className="mt-4 text-sky-600 underline">ลองใหม่อีกครั้ง</button>
           </div>
         )}
 
-        {/* Empty */}
-        {!loading && restaurants.length === 0 && (
-          <div className="text-center py-16 bg-white rounded-2xl shadow">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">ไม่พบร้านอาหาร</h3>
-            <p className="text-gray-500">ลองค้นหาด้วยคำอื่นหรือเปลี่ยนหมวดหมู่</p>
+        {loading ? (
+          <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
+             {/* Skeleton Loading (แนะนำให้ทำ Skeleton จะดู Pro กว่า Spinner หมุนๆ) */}
+             {[1, 2, 3].map((i) => (
+                <RestaurantSkeleton key={i} />
+             ))}
           </div>
-        )}
-
-        {/* Grid */}
-        {!loading && restaurants.length > 0 && (
-          <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-6">
+        ) : restaurants.length === 0 && !error ? (
+          <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+            <p className="text-5xl mb-4">🔍</p>
+            <h3 className="text-xl font-bold text-slate-800">ไม่พบสิ่งที่คุณกำลังค้นหา</h3>
+            <p className="text-slate-500">ลองใช้คำค้นหาอื่นหรือรีเซ็ตตัวกรอง</p>
+          </div>
+        ) : (
+          <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-8">
             {restaurants.map((r) => (
-              <div
-                key={r.id}
-                className="bg-white rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden group cursor-pointer transform hover:-translate-y-1"
-              >
-                <div className="relative h-56 overflow-hidden bg-gray-200">
-                  <img
-                    src={r.image_url || "/images/default.jpg"}
-                    alt={r.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    onError={(e) => {
-                      e.currentTarget.src =
-                        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800";
-                    }}
-                  />
-                  <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-semibold text-sky-700 shadow-lg">
-                    {categories.find((c) => c.value === r.category)?.icon || "🍽️"}{" "}
-                    {r.category || "อื่นๆ"}
-                  </div>
-                </div>
-
-                <div className="p-5">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2 line-clamp-1 group-hover:text-sky-700 transition">
-                    {r.name}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2 leading-relaxed">
-                    {r.description || "ร้านอาหารคุณภาพ บรรยากาศดี"}
-                  </p>
-                  {r.location && (
-                    <div className="flex items-start gap-2 text-sm text-gray-500">
-                      <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-sky-600" />
-                      <span className="line-clamp-2">{r.location}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+               <RestaurantCard key={r.id} restaurant={r} categories={categories} />
             ))}
           </div>
         )}
+      </main>
+    </div>
+  );
+}
+
+// แยก Component ย่อยออกมาเพื่อให้จัดการง่าย
+function RestaurantCard({ restaurant: r, categories }: { restaurant: Restaurant, categories: any[] }) {
+  return (
+    // นำ Link มาครอบตัว Card ไว้ และส่ง id ไปที่ URL
+    <Link href={`/restaurant/${r.id}`}>
+      <article className="group cursor-pointer bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-100 overflow-hidden flex flex-col h-full">
+        <div className="relative h-52 overflow-hidden">
+          <img
+            src={r.image_url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"}
+            alt={r.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            loading="lazy"
+          />
+          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-bold text-sky-700 uppercase tracking-wider shadow-sm">
+            {categories.find((c) => c.value === r.category)?.icon} {r.category || "ทั่วไป"}
+          </div>
+        </div>
+        <div className="p-6 flex flex-col grow">
+          <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-sky-600 transition-colors">
+            {r.name}
+          </h3>
+          <p className="text-slate-600 text-sm line-clamp-2 mb-4 grow">
+            {r.description}
+          </p>
+          <div className="pt-4 border-t border-slate-50 flex items-center gap-2 text-slate-400 text-sm">
+            <MapPin className="w-4 h-4 text-sky-500" />
+            <span className="truncate">{r.location}</span>
+          </div>
+        </div>
+      </article>
+    </Link>
+  );
+}
+
+function RestaurantSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col animate-pulse">
+      {/* 1. ส่วนรูปภาพ (ความสูง h-52 เท่าของจริง) */}
+      <div className="relative h-52 bg-slate-200">
+        {/* เลียนแบบ Badge หมวดหมู่ที่มุมซ้ายบน */}
+        <div className="absolute top-4 left-4 w-20 h-6 bg-slate-300 rounded-lg" />
+      </div>
+
+      {/* 2. ส่วนเนื้อหา (Padding p-6 เท่าของจริง) */}
+      <div className="p-6 flex flex-col flex-grow">
+        {/* ชื่อร้าน (เลียนแบบ h3) */}
+        <div className="h-7 bg-slate-200 rounded-md w-3/4 mb-2" />
+        
+        {/* คำอธิบายร้าน (เลียนแบบ line-clamp-2) */}
+        <div className="space-y-2 mb-4 flex-grow">
+          <div className="h-4 bg-slate-200 rounded-md w-full" />
+          <div className="h-4 bg-slate-200 rounded-md w-5/6" />
+        </div>
+
+        {/* 3. ส่วนท้าย (Border-t และ Location) */}
+        <div className="pt-4 border-t border-slate-50 flex items-center gap-2">
+          {/* วงกลมเล็กๆ แทน Icon MapPin */}
+          <div className="w-4 h-4 bg-slate-200 rounded-full flex-shrink-0" />
+          {/* ข้อความที่อยู่ */}
+          <div className="h-4 bg-slate-200 rounded-md w-1/2" />
+        </div>
       </div>
     </div>
   );

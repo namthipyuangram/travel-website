@@ -9,7 +9,7 @@ import { Compass, Search, Menu } from "lucide-react";
 const navItems = [
   { name: "หน้าแรก", href: "/dashboard" },
   { name: "สถานที่ท่องเที่ยว", href: "/destinations" },
-  { name: "ของกิน", href: "/food" },
+  { name: "ของกิน", href: "/restaurant" },
   { name: "ที่พัก", href: "/accomodations" },
   { name: "บทความ", href: "/blog" },
   { name: "ติดต่อเรา", href: "/contact" },
@@ -29,7 +29,7 @@ export default function Navbar() {
       {/* โลโก้ */}
       <Link href="/" className="flex items-center gap-2 text-white cursor-pointer group">
         <Compass className="w-8 h-8 text-[#E5A93C] group-hover:rotate-45 transition-transform duration-700" />
-        <span className="text-xl font-bold tracking-[0.1em] uppercase">เที่ยวตามงบ</span>
+        <span className="text-xl font-bold tracking-wider uppercase">เที่ยวตามงบ</span>
       </Link>
 
       {/* เมนูตรงกลาง (ซ่อนในมือถือ) */}
