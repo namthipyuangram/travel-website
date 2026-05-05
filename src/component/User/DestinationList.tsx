@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import type { Destination } from "@/types/destination";
 
@@ -95,7 +96,7 @@ export default function DestinationList() {
           สถานที่แนะนำในโคราช ({destinations.length} แห่ง)
         </h3>
 
-        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
+        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm w-fit mx-auto">
             <span className="text-sm font-medium text-gray-600 pl-2">งบเที่ยว:</span>
             <input
                 type="number"
@@ -128,42 +129,43 @@ export default function DestinationList() {
           </button>
         </div>
       ) : (
-        <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-6">
-            {destinations.map((d) => {
-                // ✅ แก้ไข: ดึงค่าและใส่ fallback เป็น 0 ทันที เพื่อป้องกัน null error
-                const minPrice = d.min_price || 0;
-                const maxPrice = d.max_price || 0;
+      <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-6">
+    {destinations.map((d) => {
+        const minPrice = d.min_price || 0;
+        const maxPrice = d.max_price || 0;
 
-                return (
-                    <div
-                        key={d.id}
-                        className="bg-white rounded-xl shadow hover:shadow-lg transition overflow-hidden cursor-pointer group"
-                    >
-                        <div className="relative w-full h-48">
-                            <Image
-                                src={d.image_url || "/images/default.jpg"}
-                                alt={d.name}
-                                fill
-                                className="object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                        </div>
-                        <div className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                                <h4 className="text-lg font-bold text-sky-700 line-clamp-1">{d.name}</h4>
-                                <div className="text-right shrink-0 ml-2">
-                                    {/* ✅ ใช้ตัวแปร minPrice / maxPrice ที่กัน null แล้ว */}
-                                    {maxPrice === 0 ? (
-                                        <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full whitespace-nowrap">ฟรี</span>
-                                    ) : (
-                                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 whitespace-nowrap">
-                                            {minPrice === maxPrice 
-                                                ? `฿${minPrice.toLocaleString()}` 
-                                                : `฿${minPrice.toLocaleString()}-${maxPrice.toLocaleString()}`
-                                            }
-                                        </span>
-                                    )}
-                                </div>
+        return (
+            // ✅ นำ <Link> มาครอบ และใส่ href ชี้ไปที่หน้าที่ต้องการสร้าง
+            <Link 
+                href={`/destinations/${d.id}`} 
+                key={d.id} 
+                className="block outline-none"
+            >
+                <div className="bg-white rounded-xl shadow hover:shadow-lg transition overflow-hidden cursor-pointer group h-full">
+                    <div className="relative w-full h-48">
+                        <Image
+                            src={d.image_url || "/images/default.jpg"}
+                            alt={d.name}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                    </div>
+                    <div className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                            <h4 className="text-lg font-bold text-sky-700 line-clamp-1">{d.name}</h4>
+                            <div className="text-right shrink-0 ml-2">
+                                {maxPrice === 0 ? (
+                                    <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full whitespace-nowrap">ฟรี</span>
+                                ) : (
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 whitespace-nowrap">
+                                        {minPrice === maxPrice 
+                                            ? `฿${minPrice.toLocaleString()}` 
+                                            : `฿${minPrice.toLocaleString()}-${maxPrice.toLocaleString()}`
+                                        }
+                                    </span>
+                                )}
                             </div>
+                        </div>
 
                             <p className="text-sm text-gray-600 mt-1 line-clamp-2 min-h-[40px]">
                                 {d.description || "ไม่มีคำอธิบาย"}
@@ -176,6 +178,7 @@ export default function DestinationList() {
                             </div>
                         </div>
                     </div>
+                    </Link>
                 );
             })}
         </div>
