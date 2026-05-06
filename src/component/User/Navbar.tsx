@@ -10,7 +10,7 @@ const navItems = [
   { name: "หน้าแรก", href: "/dashboard" },
   { name: "สถานที่ท่องเที่ยว", href: "/destinations" },
   { name: "ของกิน", href: "/restaurant" },
-  { name: "ที่พัก", href: "/accomodations" },
+  { name: "ที่พัก", href: "/accommodations" },
   { name: "บทความ", href: "/blog" },
   { name: "ติดต่อเรา", href: "/contact" },
 ];
