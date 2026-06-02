@@ -1,0 +1,8 @@
+name = "travel"
+compatibility_date = "2026-06-02"
+
+[assets]
+directory = ".open-next/assets"
+
+[build]
+command = "npm run build"
