@@ -1,6 +1,6 @@
 // src/app/api/destinations/route.ts
 import { NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
 export async function GET(req: Request) {
@@ -40,31 +40,39 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // ✅ เช็ค Admin
-    const user = await currentUser();
-    if (user?.publicMetadata?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden: Admin only" }, { status: 403 });
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 🔥 ดึง role จาก Supabase แทน Clerk
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("users")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (profileError || profile?.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden: Admin only" },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
     const { name, description, category, image_url, min_price, max_price } = body;
 
-    // ✅ Validation
     if (!name || !description || !category) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // แปลงค่าเป็นตัวเลข (กันค่า null หรือ string ว่าง)
     const minPriceNum = Number(min_price) || 0;
     const maxPriceNum = Number(max_price) || 0;
 
     if (minPriceNum > maxPriceNum) {
-      return NextResponse.json({ error: "Min price cannot be greater than Max price" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid price range" }, { status: 400 });
     }
 
-    // ✅ บันทึกลงฐานข้อมูล
     const { data, error } = await supabaseAdmin
       .from("destinations")
       .insert([
@@ -82,13 +90,14 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      console.error("❌ Supabase POST error:", error); // ดู Log ตรงนี้ถ้าระบบแจ้ง Error
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    console.error("❌ POST Internal error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

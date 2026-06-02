@@ -1,22 +1,33 @@
 import { supabaseClient } from "@/lib/supabaseClient";
 import { auth } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: RouteContext
 ) {
   try {
+    const { id } = await params;
+
     const { data, error } = await supabaseClient
       .from("accommodations")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (error) {
       console.error("GET Error:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
     }
 
     if (!data) {
@@ -27,8 +38,9 @@ export async function GET(
     }
 
     return NextResponse.json(data);
-  } catch (err) {
-    console.error("GET Exception:", err);
+  } catch (error) {
+    console.error("GET Exception:", error);
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -37,41 +49,50 @@ export async function GET(
 }
 
 export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  { params }: RouteContext
 ) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
+    const { id } = await params;
     const body = await req.json();
 
-    // ✅ เพิ่ม .select() เพื่อ return ข้อมูลที่ update
     const { data, error } = await supabaseClient
       .from("accommodations")
       .update(body)
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("created_by", userId)
-      .select(); // ✅ สำคัญมาก!
+      .select()
+      .single();
 
     if (error) {
-      console.error("Update Error:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("PUT Error:", error);
+
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
     }
 
-    if (!data || data.length === 0) {
+    if (!data) {
       return NextResponse.json(
         { error: "Accommodation not found or unauthorized" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(data[0]);
-  } catch (err) {
-    console.error("PUT Exception:", err);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("PUT Exception:", error);
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -80,30 +101,43 @@ export async function PUT(
 }
 
 export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: RouteContext
 ) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
+
+    const { id } = await params;
 
     const { error } = await supabaseClient
       .from("accommodations")
       .delete()
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("created_by", userId);
 
     if (error) {
-      console.error("Delete Error:", error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("DELETE Error:", error);
+
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("DELETE Exception:", err);
+    return NextResponse.json({
+      success: true,
+      message: "Accommodation deleted successfully",
+    });
+  } catch (error) {
+    console.error("DELETE Exception:", error);
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

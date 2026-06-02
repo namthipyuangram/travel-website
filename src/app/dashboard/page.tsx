@@ -1,4 +1,3 @@
-import { currentUser } from "@clerk/nextjs/server";
 import Navbar from "../../component/User/Navbar";
 import HeroSection from "../../component/HeroSection";
 import CategorySection from "../../component/User/CategorySection";
@@ -6,13 +5,9 @@ import DestinationList from "../../component/User/DestinationList";
 import Footer from "../../component/Footer";
 
 export default async function DashboardPage() {
-  const user = await currentUser(); // ยังเก็บไว้ใช้ในส่วนอื่นได้
-
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* ❌ เอา user ออก */}
       <Navbar />
-
       <HeroSection />
 
       <section className="max-w-7xl mx-auto px-4 py-8">

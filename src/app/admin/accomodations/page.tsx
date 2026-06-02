@@ -12,12 +12,19 @@ interface Accommodation {
   name: string;
   description: string;
   address: string;
+
   price_range: string;
+
+  min_price: number | null;
+  max_price: number | null;
+
   category: string;
   contact_phone: string;
   contact_line: string;
   contact_facebook: string;
+
   images: string[] | null;
+
   created_by: string;
   created_at: string;
 }

@@ -3,7 +3,16 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Search, MapPin, Utensils } from "lucide-react";
 
-// ... Interface คงเดิม ...
+interface Restaurant {
+  id: string;
+  name: string;
+  description: string;
+  location: string;
+  category: string;
+  image_url: string | null;
+  created_at?: string;
+}
+
 
 export default function RestaurantList() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);

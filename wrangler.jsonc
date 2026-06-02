@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  "name": "travel-website",
+
+  "main": ".open-next/worker.js",
+
+  "compatibility_date": "2026-06-02",
+
+  "assets": {
+    "directory": ".open-next/assets"
+  }
+}

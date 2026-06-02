@@ -6,20 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && wrangler dev",
+    "cf:deploy": "opennextjs-cloudflare build && wrangler deploy"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.2.7",
+    "@clerk/nextjs": "^7.4.2",
     "@supabase/supabase-js": "^2.105.1",
     "lucide-react": "^1.14.0",
     "motion": "^12.38.0",
-    "next": "16.2.4",
+    "next": "^16.2.7",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
     "svix": "^1.92.2"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.19.11",
     "@tailwindcss/postcss": "^4.2.4",
     "@types/node": "^20.19.39",
     "@types/react": "^19.2.14",
@@ -27,6 +31,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.96.0"
   }
 }
