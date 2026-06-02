@@ -3,16 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "opennextjs-cloudflare build",
-    "preview": "opennextjs-cloudflare build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy",
-    "cf:build": "opennextjs-cloudflare build",
-    "cf:preview": "opennextjs-cloudflare build && wrangler dev",
-    "cf:deploy": "npm run build && wrangler deploy",
-    "lint": "eslint",
-    "start": "next start"
-  },
+  "dev": "next dev",
+
+  "build": "next build",
+
+  "opennext:build": "opennextjs-cloudflare build",
+
+  "preview": "npm run opennext:build && wrangler dev",
+
+  "deploy": "npm run opennext:build && wrangler deploy",
+
+  "cf:build": "npm run opennext:build",
+
+  "cf:preview": "npm run opennext:build && wrangler dev",
+
+  "cf:deploy": "npm run opennext:build && wrangler deploy",
+
+  "lint": "eslint",
+
+  "start": "next start"
+},
   "dependencies": {
     "@clerk/nextjs": "^7.4.2",
     "@supabase/supabase-js": "^2.105.1",
