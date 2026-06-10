@@ -1,15 +1,37 @@
 // src/component/User/DestinationList.tsx
 "use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { motion, Variants } from "framer-motion";
+import { Heart, Star, MapPin, Wallet } from "lucide-react"; 
 import type { Destination } from "@/types/destination";
+
+// Framer Motion Variants
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.1 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  show: { 
+    opacity: 1, 
+    y: 0, 
+    transition: { type: "spring", stiffness: 300, damping: 24 } 
+  },
+};
 
 export default function DestinationList() {
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // State สำหรับงบประมาณ
   const [minBudget, setMinBudget] = useState<number | "">("");
   const [maxBudget, setMaxBudget] = useState<number | "">("");
 
@@ -38,6 +60,7 @@ export default function DestinationList() {
       }
     }
 
+    // Debounce delay 500ms เพื่อไม่ให้ยิง API ถี่เกินไปตอนพิมพ์ตัวเลข
     const timer = setTimeout(() => {
         fetchDestinations();
     }, 500);
@@ -45,29 +68,23 @@ export default function DestinationList() {
 
   }, [minBudget, maxBudget]);
 
-  // 🌟 Skeleton Loading สวยงามขึ้น
+  // 🌟 Skeleton Loading สไตล์มินิมอล 4 คอลัมน์
   if (loading) {
     return (
-      <div id="destinations" className="mt-4">
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 gap-4">
-          <div className="h-8 w-64 bg-gray-200 rounded-lg animate-pulse"></div>
-          <div className="h-12 w-full md:w-80 bg-gray-200 rounded-xl animate-pulse"></div>
+      <div id="destinations" className="w-full mt-4 max-w-[1400px] mx-auto px-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-10 gap-6">
+          <div className="h-10 w-72 bg-neutral-200/60 rounded-lg animate-pulse"></div>
+          <div className="h-12 w-full lg:w-80 bg-neutral-200/60 rounded-full animate-pulse"></div>
         </div>
 
-        <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-8">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 animate-pulse overflow-hidden">
-              <div className="w-full h-56 bg-gray-200"></div>
-              <div className="p-5 space-y-4">
-                <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-                <div className="space-y-2">
-                  <div className="h-3 bg-gray-200 rounded"></div>
-                  <div className="h-3 bg-gray-200 rounded w-5/6"></div>
-                </div>
-                <div className="flex justify-between pt-4 border-t border-gray-100">
-                  <div className="h-8 w-20 bg-gray-200 rounded-lg"></div>
-                  <div className="h-8 w-24 bg-gray-200 rounded-lg"></div>
-                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-[1.5rem] p-3 shadow-sm border border-neutral-100 animate-pulse">
+              <div className="w-full aspect-[4/3] bg-neutral-200/60 rounded-2xl mb-4"></div>
+              <div className="px-2 space-y-3">
+                <div className="h-5 bg-neutral-200/60 rounded-md w-3/4"></div>
+                <div className="h-4 bg-neutral-200/60 rounded-md w-1/2"></div>
+                <div className="h-4 bg-neutral-200/60 rounded-md w-1/4 mt-4"></div>
               </div>
             </div>
           ))}
@@ -78,16 +95,14 @@ export default function DestinationList() {
 
   if (error) {
     return (
-      <div id="destinations" className="mt-8">
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-10 text-center shadow-sm">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-             <span className="text-2xl">🚨</span>
-          </div>
-          <h3 className="text-xl font-bold text-red-800 mb-2">เกิดข้อผิดพลาด</h3>
-          <p className="text-red-600 mb-6">{error}</p>
+      <div id="destinations" className="mt-4  w-full flex justify-center px-6">
+        <div className="bg-red-50/50 border border-red-100 rounded-3xl p-10 text-center shadow-sm max-w-md w-full">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">🚨</div>
+          <h3 className="text-lg font-semibold text-red-900 mb-2">เกิดข้อผิดพลาด</h3>
+          <p className="text-sm text-red-600/80 mb-6">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="bg-red-600 hover:bg-red-700 transition-colors text-white px-8 py-3 rounded-xl font-semibold shadow-md"
+            className="bg-neutral-900 hover:bg-black transition-colors text-white px-6 py-2.5 rounded-full text-sm font-medium"
           >
             ลองใหม่อีกครั้ง
           </button>
@@ -97,133 +112,129 @@ export default function DestinationList() {
   }
 
   return (
-    <div id="destinations" className="mt-4">
-      {/* 🌟 Filter Bar แบบ Modern */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+    <div id="destinations" className="w-full mt-4 md:mt-8 max-w-[1400px] mx-auto px-6 ">
+      
+      {/* 🌟 Section Header & Budget Filter */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-10 gap-6">
         <div>
-          <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            สถานที่แนะนำ 
-           
-          </h3>
-          <p className="text-gray-500 text-sm mt-1">ค้นหาจุดหมายปลายทางที่เหมาะกับงบประมาณของคุณ</p>
+          <h2 className="text-3xl font-bold text-neutral-900 mb-2">สถานที่ท่องเที่ยว</h2>
         </div>
 
-        <div className="flex items-center w-full lg:w-auto">
-          <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-xl border border-gray-200 w-full lg:w-fit focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500 transition-all">
-            <div className="pl-3 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-            </div>
-            <span className="text-sm font-medium text-gray-600 hidden sm:block">งบเที่ยว:</span>
+        {/* แถบกรอกงบประมาณ (Budget Filter Pill) */}
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          <div className="flex items-center bg-white px-4 py-2.5 rounded-full border border-neutral-200 shadow-sm focus-within:ring-2 focus-within:ring-[#E5A93C]/50 focus-within:border-[#E5A93C] transition-all w-full lg:w-auto">
+            <Wallet className="w-4 h-4 text-neutral-400 mr-3 hidden sm:block" />
             <input
                 type="number"
-                placeholder="ต่ำสุด"
+                placeholder="งบต่ำสุด"
                 value={minBudget}
                 onChange={(e) => setMinBudget(e.target.value ? Number(e.target.value) : "")}
-                className="w-full sm:w-24 px-2 py-2 bg-transparent text-sm focus:outline-none text-gray-700 font-medium"
+                className="w-full sm:w-24 bg-transparent text-sm font-medium text-neutral-700 outline-none placeholder:text-neutral-400"
             />
-            <span className="text-gray-300">|</span>
+            <span className="text-neutral-300 mx-2">|</span>
             <input
                 type="number"
-                placeholder="สูงสุด"
+                placeholder="งบสูงสุด"
                 value={maxBudget}
                 onChange={(e) => setMaxBudget(e.target.value ? Number(e.target.value) : "")}
-                className="w-full sm:w-24 px-2 py-2 bg-transparent text-sm focus:outline-none text-gray-700 font-medium"
+                className="w-full sm:w-24 bg-transparent text-sm font-medium text-neutral-700 outline-none placeholder:text-neutral-400"
             />
-            <span className="text-sm text-gray-500 pr-4 font-medium hidden sm:block">บาท</span>
+            <span className="text-sm font-medium text-neutral-400 ml-2">บาท</span>
           </div>
+          
+          <button className="hidden lg:block px-6 py-2.5 rounded-full border border-neutral-200 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-all active:scale-95 shrink-0">
+            See All
+          </button>
         </div>
       </div>
 
       {destinations.length === 0 ? (
-        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-16 text-center shadow-inner">
-          <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-             <span className="text-4xl">🏜️</span>
-          </div>
-          <h4 className="text-xl font-bold text-gray-700 mb-2">ไม่พบสถานที่ท่องเที่ยว</h4>
-          <p className="text-gray-500 mb-6">ลองปรับช่วงราคาให้กว้างขึ้น หรือล้างตัวกรองเพื่อดูทั้งหมด</p>
+        <div className="bg-white rounded-[2rem] p-16 text-center border border-neutral-100 shadow-lg flex flex-col items-center">
+           <div className="text-4xl mb-4 opacity-50">🏜️</div>
+          <h4 className="text-lg font-medium text-neutral-900 mb-2">ไม่พบที่พักในงบประมาณนี้</h4>
+          <p className="text-sm text-neutral-500 mb-6">ลองปรับช่วงราคาให้กว้างขึ้น หรือล้างตัวกรองเพื่อดูทั้งหมด</p>
           <button 
             onClick={() => { setMinBudget(""); setMaxBudget(""); }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-md"
+            className="px-6 py-2.5 bg-neutral-900 text-white rounded-full text-sm font-medium hover:bg-black transition-colors"
           >
-            ล้างตัวกรองทั้งหมด
+            ล้างตัวกรอง
           </button>
         </div>
       ) : (
-      <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-8">
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        viewport={{ once: true, margin: "-50px" }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+      >
         {destinations.map((d) => {
             const minPrice = d.min_price || 0;
             const maxPrice = d.max_price || 0;
 
             return (
-                <Link 
-                    href={`/destinations/${d.id}`} 
-                    key={d.id} 
-                    className="block outline-none group"
-                >
-                    {/* 🌟 Card Design: ใส่ Hover Animation แบบพรีเมียม */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 ease-out overflow-hidden h-full flex flex-col">
-                        <div className="relative w-full h-56 overflow-hidden">
-                            <Image
-                                src={d.image_url || "/images/default.jpg"}
-                                alt={d.name}
-                                fill
-                                className="object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out"
-                            />
-                            {/* Tags บนรูปภาพ */}
-                            <div className="absolute top-4 left-4 flex gap-2">
-                                <span className="text-xs font-semibold bg-white/90 backdrop-blur-sm text-sky-800 px-3 py-1.5 rounded-full shadow-sm">
-                                    {d.category || "จุดหมายปลายทาง"}
-                                </span>
-                            </div>
-                            {/* ราคาแบนเนอร์มุมขวาบน */}
-                            <div className="absolute top-4 right-4">
-                                {maxPrice === 0 ? (
-                                    <span className="text-xs font-bold text-white bg-green-500/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm">
-                                        เข้าชมฟรี
-                                    </span>
-                                ) : (
-                                    <span className="text-xs font-bold text-emerald-900 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-emerald-100">
-                                        {minPrice === maxPrice 
-                                            ? `฿${minPrice.toLocaleString()}` 
-                                            : `฿${minPrice.toLocaleString()} - ${maxPrice.toLocaleString()}`
-                                        }
-                                    </span>
-                                )}
-                            </div>
-                        </div>
+                <motion.div variants={itemVariants} key={d.id}>
+                  <Link href={`/destinations/${d.id}`} className="block outline-none group h-full">
+                      <div className="bg-white rounded-[1.5rem] px-4 py-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 hover:shadow-lg hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
+                          
+                          <div className="relative w-full aspect-[4/3] rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
+                              <Image
+                                  src={d.image_url || "/images/default.jpg"}
+                                  alt={d.name}
+                                  fill
+                                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                                  className="object-cover group-hover:scale-105 transition-transform duration-700 ease-[0.16,1,0.3,1]"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                              
+                              <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold text-neutral-900 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20">
+                                  {maxPrice === 0 ? (
+                                      "Free Entry"
+                                  ) : (
+                                      <>
+                                          ฿{minPrice.toLocaleString()} <span className="text-neutral-500 font-normal">/คืน</span>
+                                      </>
+                                  )}
+                              </div>
 
-                        <div className="p-5 flex flex-col flex-grow">
-                            <div className="flex justify-between items-start mb-1 gap-2">
-                                <h4 className="text-xl font-bold text-gray-900 line-clamp-1 group-hover:text-emerald-600 transition-colors">
-                                    {d.name}
-                                </h4>
-                            </div>
+                              <button 
+                                onClick={(e) => { e.preventDefault(); }}
+                                className="absolute top-3 right-3 w-8 h-8 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center text-neutral-400 hover:text-red-500 hover:scale-110 active:scale-95 transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20 z-10"
+                              >
+                                  <Heart className="w-4 h-4" />
+                              </button>
+                          </div>
 
-                            {/* 🌟 Mockup Rating (ใส่เพิ่มเพื่อให้ Card ดูน่าเชื่อถือ) */}
-                            <div className="flex items-center gap-1 mb-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                                <span className="text-sm font-bold text-gray-700">4.8</span>
-                                <span className="text-xs text-gray-400 ml-1">(120 รีวิว)</span>
-                            </div>
+                          <div className="px-2 pb-2 flex flex-col flex-grow justify-between">
+                              <div>
+                                  <h4 className="text-[1.1rem] font-bold text-neutral-900 line-clamp-1 mb-1.5 group-hover:text-neutral-700 transition-colors">
+                                      {d.name}
+                                  </h4>
+                                  <p className="text-sm text-neutral-500 flex items-center gap-1.5 font-medium">
+                                      <MapPin className="w-3.5 h-3.5 opacity-70" /> 
+                                      <span className="truncate">{d.category || "นครราชสีมา"}</span>
+                                  </p>
+                              </div>
 
-                            <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-grow">
-                                {d.description || "สัมผัสประสบการณ์การท่องเที่ยวที่น่าประทับใจ พร้อมเก็บความทรงจำดีๆ ที่คุณจะไม่มีวันลืม"}
-                            </p>
-                            
-                            {/* 🌟 ปุ่ม Call To Action */}
-                            <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
-                                <span className="text-sm font-medium text-emerald-600 group-hover:text-emerald-700 flex items-center gap-1">
-                                    ดูรายละเอียด
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </Link>
+                              <div className="flex items-center gap-1.5 mt-4">
+                                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                                  <span className="text-sm font-bold text-neutral-900">4.8</span>
+                                  <span className="text-xs text-neutral-400 font-medium ml-0.5">(128 รีวิว)</span>
+                              </div>
+                          </div>
+                      </div>
+                  </Link>
+                </motion.div>
             );
         })}
-      </div>
+      </motion.div>
       )}
+      
+      <div className="mt-8 flex justify-center lg:hidden">
+         <button className="px-8 py-3 rounded-full border border-neutral-200 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-all active:scale-95 shadow-sm">
+          ดูทั้งหมด
+        </button>
+      </div>
     </div>
   );
 }

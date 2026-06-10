@@ -10,7 +10,7 @@ export default async function DashboardPage() {
       <Navbar />
       <HeroSection />
 
-      <section className="max-w-7xl mx-auto px-4 py-8">
+      <section className="min-w-7xl mx-auto px-4 py-8 bg-gradient-to-br from-amber-50 to-orange-50">
         <CategorySection />
         <DestinationList />
       </section>

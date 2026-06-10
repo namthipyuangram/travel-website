@@ -1,7 +1,11 @@
+// src/component/Restaurant/RestaurantList.tsx
 "use client";
+
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Search, MapPin, Utensils } from "lucide-react";
+import Image from "next/image";
+import { motion, Variants } from "framer-motion";
+import { Search, MapPin, Heart, Star } from "lucide-react";
 
 interface Restaurant {
   id: string;
@@ -13,13 +17,30 @@ interface Restaurant {
   created_at?: string;
 }
 
+// Framer Motion Variants
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.1 },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 30 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", stiffness: 300, damping: 24 },
+  },
+};
 
 export default function RestaurantList() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); // เพิ่มการจัดการ Error
+  const [error, setError] = useState<string | null>(null);
 
   const categories = [
     { value: "", label: "ทั้งหมด", icon: "🍽️" },
@@ -29,7 +50,6 @@ export default function RestaurantList() {
     { value: "อื่นๆ", label: "อื่นๆ", icon: "📍" },
   ];
 
-  // ใช้ useCallback เพื่อ memoize ฟังก์ชัน
   const fetchRestaurants = useCallback(async (searchTerm: string, catTerm: string) => {
     setLoading(true);
     setError(null);
@@ -40,166 +60,235 @@ export default function RestaurantList() {
 
       const res = await fetch(`/api/restaurants?${params.toString()}`);
       if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
-      
+
       const data = await res.json();
       setRestaurants(data);
     } catch (err) {
+      console.error("❌ Error fetching restaurants:", err);
       setError("เกิดข้อผิดพลาดในการโหลดข้อมูล กรุณาลองใหม่อีกครั้ง");
-      console.error(err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Debounce delay 400ms
     const timer = setTimeout(() => {
       fetchRestaurants(search, category);
     }, 400);
     return () => clearTimeout(timer);
   }, [search, category, fetchRestaurants]);
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-2 flex items-center gap-3">
-            <Utensils className="text-sky-600 w-10 h-10" />
-            ร้านอาหารแนะนำ
-          </h1>
-          <p className="text-slate-500 text-lg">ค้นพบร้านอาหารอร่อยๆ ในโคราช</p>
+  // 🌟 Skeleton Loading สไตล์มินิมอล 4 คอลัมน์
+  if (loading && restaurants.length === 0) {
+    return (
+      <div id="restaurants" className="w-full max-w-[1400px] mx-auto px-6 pb-20">
+        <div className="flex flex-col gap-6 mb-10">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="h-10 w-72 bg-neutral-200/60 rounded-lg animate-pulse"></div>
+            <div className="h-12 w-full lg:w-80 bg-neutral-200/60 rounded-full animate-pulse"></div>
+          </div>
+          <div className="flex gap-3 overflow-hidden">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-10 w-28 bg-neutral-200/60 rounded-full animate-pulse shrink-0"></div>
+            ))}
+          </div>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search & Filter */}
-        <section className="sticky top-4 z-10 bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-slate-200 p-4 mb-8">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <div key={i} className="bg-white rounded-[1.5rem] p-3 shadow-sm border border-neutral-100 animate-pulse">
+              <div className="w-full aspect-[4/3] bg-neutral-200/60 rounded-[1.25rem] mb-4"></div>
+              <div className="px-2 space-y-3">
+                <div className="h-5 bg-neutral-200/60 rounded-md w-3/4"></div>
+                <div className="h-4 bg-neutral-200/60 rounded-md w-full"></div>
+                <div className="h-4 bg-neutral-200/60 rounded-md w-2/3"></div>
+                <div className="flex justify-between items-center pt-2">
+                  <div className="h-4 bg-neutral-200/60 rounded-md w-1/3"></div>
+                  <div className="h-4 bg-neutral-200/60 rounded-md w-1/4"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 🚨 Error State
+  if (error) {
+    return (
+      <div id="restaurants" className="mt-6 w-full flex justify-center px-6 pb-20">
+        <div className="bg-red-50/50 border border-red-100 rounded-3xl p-10 text-center shadow-sm max-w-md w-full">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">🚨</div>
+          <h3 className="text-lg font-semibold text-red-900 mb-2">เกิดข้อผิดพลาด</h3>
+          <p className="text-sm text-red-600/80 mb-6">{error}</p>
+          <button
+            onClick={() => fetchRestaurants(search, category)}
+            className="bg-neutral-900 hover:bg-black transition-colors text-white px-6 py-2.5 rounded-full text-sm font-medium"
+          >
+            ลองใหม่อีกครั้ง
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div id="restaurants" className="w-full mt-6 max-w-[1400px] mx-auto px-6 pb-20">
+      
+      {/* 🌟 Section Header & Filters */}
+      <div className="flex flex-col gap-6 mb-10">
+        
+        {/* Title & Search Pill */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div>
+            <h2 className="text-3xl font-bold text-neutral-900 mb-2">ร้านอาหารแนะนำ</h2>
+            <p className="text-sm font-medium text-neutral-500">ค้นพบร้านอาหารอร่อยๆ ในโคราช</p>
+          </div>
+
+          <div className="w-full lg:w-auto">
+            <div className="flex items-center bg-white px-4 py-3 lg:py-2.5 rounded-full border border-neutral-200 shadow-sm focus-within:ring-2 focus-within:ring-neutral-900/10 focus-within:border-neutral-900 transition-all w-full lg:w-80">
+              <Search className="w-4 h-4 text-neutral-400 mr-3 shrink-0" />
               <input
                 type="text"
                 placeholder="ค้นหาชื่อร้านหรือสถานที่..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-sky-500 transition"
+                className="w-full bg-transparent text-sm font-medium text-neutral-700 outline-none placeholder:text-neutral-400"
               />
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
-              {categories.map((cat) => (
-                <button
-                  key={cat.value}
-                  onClick={() => setCategory(cat.value)}
-                  aria-pressed={category === cat.value}
-                  className={`px-5 py-2.5 rounded-xl font-medium transition flex items-center gap-2 whitespace-nowrap shadow-sm ${
-                    category === cat.value
-                      ? "bg-sky-600 text-white"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                  }`}
+              {search && (
+                <button 
+                  onClick={() => setSearch("")}
+                  className="ml-2 text-neutral-400 hover:text-neutral-600 text-xs font-bold"
                 >
-                  <span>{cat.icon}</span>
-                  {cat.label}
+                  ✕
                 </button>
-              ))}
+              )}
             </div>
           </div>
-        </section>
-
-        {/* Status Messages (Error/Loading/Empty) */}
-        {error && (
-          <div className="text-center py-12 text-red-500 bg-red-50 rounded-2xl border border-red-100">
-            <p>{error}</p>
-            <button onClick={() => fetchRestaurants(search, category)} className="mt-4 text-sky-600 underline">ลองใหม่อีกครั้ง</button>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
-             {/* Skeleton Loading (แนะนำให้ทำ Skeleton จะดู Pro กว่า Spinner หมุนๆ) */}
-             {[1, 2, 3].map((i) => (
-                <RestaurantSkeleton key={i} />
-             ))}
-          </div>
-        ) : restaurants.length === 0 && !error ? (
-          <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-            <p className="text-5xl mb-4">🔍</p>
-            <h3 className="text-xl font-bold text-slate-800">ไม่พบสิ่งที่คุณกำลังค้นหา</h3>
-            <p className="text-slate-500">ลองใช้คำค้นหาอื่นหรือรีเซ็ตตัวกรอง</p>
-          </div>
-        ) : (
-          <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-8">
-            {restaurants.map((r) => (
-               <RestaurantCard key={r.id} restaurant={r} categories={categories} />
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
-
-// แยก Component ย่อยออกมาเพื่อให้จัดการง่าย
-function RestaurantCard({ restaurant: r, categories }: { restaurant: Restaurant, categories: any[] }) {
-  return (
-    // นำ Link มาครอบตัว Card ไว้ และส่ง id ไปที่ URL
-    <Link href={`/restaurant/${r.id}`}>
-      <article className="group cursor-pointer bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 border border-slate-100 overflow-hidden flex flex-col h-full">
-        <div className="relative h-52 overflow-hidden">
-          <img
-            src={r.image_url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"}
-            alt={r.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-            loading="lazy"
-          />
-          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-bold text-sky-700 uppercase tracking-wider shadow-sm">
-            {categories.find((c) => c.value === r.category)?.icon} {r.category || "ทั่วไป"}
-          </div>
-        </div>
-        <div className="p-6 flex flex-col grow">
-          <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-sky-600 transition-colors">
-            {r.name}
-          </h3>
-          <p className="text-slate-600 text-sm line-clamp-2 mb-4 grow">
-            {r.description}
-          </p>
-          <div className="pt-4 border-t border-slate-50 flex items-center gap-2 text-slate-400 text-sm">
-            <MapPin className="w-4 h-4 text-sky-500" />
-            <span className="truncate">{r.location}</span>
-          </div>
-        </div>
-      </article>
-    </Link>
-  );
-}
-
-function RestaurantSkeleton() {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col animate-pulse">
-      {/* 1. ส่วนรูปภาพ (ความสูง h-52 เท่าของจริง) */}
-      <div className="relative h-52 bg-slate-200">
-        {/* เลียนแบบ Badge หมวดหมู่ที่มุมซ้ายบน */}
-        <div className="absolute top-4 left-4 w-20 h-6 bg-slate-300 rounded-lg" />
-      </div>
-
-      {/* 2. ส่วนเนื้อหา (Padding p-6 เท่าของจริง) */}
-      <div className="p-6 flex flex-col flex-grow">
-        {/* ชื่อร้าน (เลียนแบบ h3) */}
-        <div className="h-7 bg-slate-200 rounded-md w-3/4 mb-2" />
-        
-        {/* คำอธิบายร้าน (เลียนแบบ line-clamp-2) */}
-        <div className="space-y-2 mb-4 flex-grow">
-          <div className="h-4 bg-slate-200 rounded-md w-full" />
-          <div className="h-4 bg-slate-200 rounded-md w-5/6" />
         </div>
 
-        {/* 3. ส่วนท้าย (Border-t และ Location) */}
-        <div className="pt-4 border-t border-slate-50 flex items-center gap-2">
-          {/* วงกลมเล็กๆ แทน Icon MapPin */}
-          <div className="w-4 h-4 bg-slate-200 rounded-full flex-shrink-0" />
-          {/* ข้อความที่อยู่ */}
-          <div className="h-4 bg-slate-200 rounded-md w-1/2" />
+        {/* Categories Pills (Scrollable) */}
+        <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-6 px-6 lg:mx-0 lg:px-0 no-scrollbar w-full">
+          {categories.map((cat) => {
+            const isActive = category === cat.value;
+            return (
+              <button
+                key={cat.value}
+                onClick={() => setCategory(cat.value)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all active:scale-95 shrink-0 border flex items-center gap-2 ${
+                  isActive
+                    ? "bg-neutral-900 text-white border-neutral-900 shadow-md"
+                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50 hover:border-neutral-300"
+                }`}
+              >
+                <span>{cat.icon}</span>
+                {cat.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      {/* 🌟 Content Area */}
+      {restaurants.length === 0 ? (
+        <div className="bg-white rounded-[2rem] p-16 text-center border border-neutral-100 shadow-sm flex flex-col items-center">
+          <div className="text-4xl mb-4 opacity-50">🍳</div>
+          <h4 className="text-lg font-medium text-neutral-900 mb-2">ไม่พบร้านอาหารที่คุณค้นหา</h4>
+          <p className="text-sm text-neutral-500 mb-6">ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่ใหม่ดูสิ</p>
+          <button
+            onClick={() => { setSearch(""); setCategory(""); }}
+            className="px-6 py-2.5 bg-neutral-900 text-white rounded-full text-sm font-medium hover:bg-black transition-colors"
+          >
+            ล้างตัวกรองทั้งหมด
+          </button>
+        </div>
+      ) : (
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          viewport={{ once: true, margin: "-50px" }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative"
+        >
+          {loading && (
+             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 rounded-3xl" />
+          )}
+          
+          {restaurants.map((r) => {
+            const catInfo = categories.find((c) => c.value === r.category) || categories[0];
+
+            return (
+              <motion.div variants={itemVariants} key={r.id}>
+                <Link href={`/restaurant/${r.id}`} className="block outline-none group h-full">
+                  <div className="bg-white rounded-[1.5rem] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-100/60 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
+                    
+                    {/* Image Section */}
+                    <div className="relative w-full aspect-[4/3] rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
+                      <Image
+                        src={r.image_url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"}
+                        alt={r.name}
+                        fill
+                        unoptimized={true} // ป้องกัน Error หากดึงรูปจาก External URL ที่ไม่ได้ตั้งค่าใน next.config.js
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-700 ease-[0.16,1,0.3,1]"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      
+                      {/* Badge Top Left */}
+                      <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold text-neutral-900 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20 flex items-center gap-1.5">
+                        <span>{catInfo.icon}</span>
+                        {r.category || "ทั่วไป"}
+                      </div>
+
+                      {/* Favorite Button Top Right */}
+                      <button
+                        onClick={(e) => { e.preventDefault(); }}
+                        className="absolute top-3 right-3 w-8 h-8 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center text-neutral-400 hover:text-red-500 hover:scale-110 active:scale-95 transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20 z-10"
+                      >
+                        <Heart className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Content Section */}
+                    <div className="px-2 pb-2 flex flex-col flex-grow">
+                      <h4 className="text-[1.1rem] font-bold text-neutral-900 line-clamp-1 mb-1.5 group-hover:text-neutral-700 transition-colors">
+                        {r.name}
+                      </h4>
+                      <p className="text-sm text-neutral-500 line-clamp-2 mb-4 grow leading-relaxed">
+                        {r.description}
+                      </p>
+
+                      <div className="pt-3 border-t border-neutral-100 flex items-center justify-between mt-auto">
+                        <p className="text-sm text-neutral-500 flex items-center gap-1.5 font-medium">
+                          <MapPin className="w-3.5 h-3.5 opacity-70" />
+                          <span className="truncate max-w-[140px]">{r.location}</span>
+                        </p>
+                        
+                        <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                          <span className="text-sm font-bold text-neutral-900">4.5</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      )}
+
+      {/* Mobile Load More Button */}
+      {restaurants.length > 0 && (
+        <div className="mt-10 flex justify-center lg:hidden">
+          <button className="px-8 py-3 rounded-full border border-neutral-200 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-all active:scale-95 shadow-sm">
+            ดูเพิ่มเติม
+          </button>
+        </div>
+      )}
     </div>
   );
 }

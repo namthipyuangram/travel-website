@@ -158,7 +158,7 @@ export default function DestinationDetail() {
           <p className="text-6xl mb-4">🥲</p>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">เกิดข้อผิดพลาด</h2>
           <p className="text-slate-500 mb-8">{error}</p>
-          <Link href="/" className="inline-flex items-center justify-center w-full px-6 py-3 bg-sky-600 text-white font-medium rounded-xl hover:bg-sky-700 transition-colors shadow-sm">
+          <Link href="/dashboard" className="inline-flex items-center justify-center w-full px-6 py-3 bg-sky-600 text-white font-medium rounded-xl hover:bg-sky-700 transition-colors shadow-sm">
             กลับไปหน้าหลัก
           </Link>
         </div>
