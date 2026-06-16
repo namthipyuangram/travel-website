@@ -1,13 +1,14 @@
 // src/types/destination.ts
-
 export interface Destination {
-  id: number;
+  id: string | number;
   name: string;
+  category?: string;
   description?: string;
-  category: "ธรรมชาติ" | "วัด" | "ร้านอาหาร" | "คาเฟ่" | "ที่พัก" | "อื่นๆ";
+  location?: string;
+  phone?: string;
+  hours?: string;
+  min_price?: number;
+  max_price?: number;
   image_url?: string;
-  min_price: number; 
-  max_price: number; 
-  created_at?: string;
-  created_by?: string;
+  images?: string[];   // ← เพิ่มบรรทัดนี้
 }

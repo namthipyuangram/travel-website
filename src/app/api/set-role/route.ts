@@ -1,18 +1,9 @@
-// src/app/api/set-role/route.ts
-
-import { clerkClient } from "@clerk/nextjs/server";
+import { clerkClient, auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 
-/**
- * @method POST
- * @description API route to set a user's public metadata role.
- * @param {Request} req - Expected body: { userId: string, role: "admin" | "user" }
- * @returns {NextResponse} - Response indicating success or failure.
- */
 export async function POST(req: Request) {
   try {
-    // 1. ตรวจสอบว่าผู้เรียก API มี permission หรือไม่ (optional - เพื่อความปลอดภัย)
+    // 1. ตรวจสอบการล็อกอิน
     const { userId: authUserId } = await auth();
     
     if (!authUserId) {
@@ -22,47 +13,41 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. ดึง userId และ role จาก body
+    // 2. เริ่มต้น Clerk Client
+    const client = await clerkClient();
+
+    // 3. ป้องกัน Privilege Escalation: เช็คว่าคนเรียก API เป็น Admin ตัวจริงหรือไม่
+    const caller = await client.users.getUser(authUserId);
+    if (caller.publicMetadata.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden: Only admins can perform this action." },
+        { status: 403 }
+      );
+    }
+
+    // 4. ดึง userId และ role จาก body
     const { userId, role = "user" } = await req.json();
 
-    // 3. ตรวจสอบข้อมูล
+    // 5. ตรวจสอบข้อมูล (เหมือนที่คุณเขียนไว้)
     if (!userId) {
-      return NextResponse.json(
-        { error: "No userId provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No userId provided" }, { status: 400 });
     }
 
     if (!["admin", "user"].includes(role)) {
-      return NextResponse.json(
-        { error: "Invalid role. Must be 'admin' or 'user'" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid role. Must be 'admin' or 'user'" }, { status: 400 });
     }
 
-    // 4. ✅ แก้ไข: await clerkClient() ก่อนเรียกใช้ .users
-    const client = await clerkClient();
+    // 6. อัปเดตข้อมูลเป้าหมาย
     await client.users.updateUserMetadata(userId, {
       publicMetadata: { role },
     });
 
     console.log(`✅ Role updated: ${userId} -> ${role}`);
 
-    // 5. ส่ง response กลับเมื่อสำเร็จ
-    return NextResponse.json(
-      { 
-        message: "Role set successfully",
-        userId,
-        role 
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({ message: "Role set successfully", userId, role }, { status: 200 });
+    
   } catch (error) {
     console.error("❌ Error setting user role:", error);
-    
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

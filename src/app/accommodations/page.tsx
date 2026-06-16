@@ -1,10 +1,10 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
 import { useEffect, useState, useMemo } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import Navbar from "@/component/User/Navbar";
 import Link from "next/link";
+import Image from "next/image"; // นำเข้า Image จาก next/image
 
 interface Accommodation {
   id: string;
@@ -22,7 +22,6 @@ interface Accommodation {
 }
 
 export default function AccommodationsPage() {
-  const { user, isLoaded } = useUser();
   const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,31 +32,32 @@ export default function AccommodationsPage() {
   const [priceFilter, setPriceFilter] = useState<string>("all");
 
   useEffect(() => {
+    // ย้ายฟังก์ชันเข้ามาไว้ใน useEffect และเรียกใช้ทันทีเพื่อแก้ปัญหา Hoisting และ Dependencies
+    const fetchAccommodations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { data, error: fetchError } = await supabaseClient
+          .from("accommodations")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (fetchError) throw fetchError;
+
+        setAccommodations(data || []);
+      } catch (err: unknown) {
+        const errorMessage =
+          err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูล";
+        setError(errorMessage);
+        console.error("Error fetching accommodations:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchAccommodations();
   }, []);
-
-  const fetchAccommodations = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabaseClient
-        .from("accommodations")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (fetchError) throw fetchError;
-
-      setAccommodations(data || []);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูล";
-      setError(errorMessage);
-      console.error("Error fetching accommodations:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Filter logic
   const filteredAccommodations = useMemo(() => {
@@ -158,7 +158,7 @@ export default function AccommodationsPage() {
       <Navbar />
 
       {/* 🌟 1. Hero Banner Section */}
-      <div className="relative w-full min-h-[400px] md:min-h-[500px] lg:min-h-[60vh] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
+      <div className="relative w-full min-h-100 md:min-h-125 lg:min-h-[60vh] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
         
         {/* รูปพื้นหลัง */}
         <div 
@@ -166,10 +166,9 @@ export default function AccommodationsPage() {
           style={{ backgroundImage: "url('/images/banner3.png')" }} 
         ></div>
         
-        {/* Overlay: เพิ่ม bg-black/50 ช่วยให้ตัวหนังสือโดดเด่นขึ้นบนรูปภาพที่สว่าง */}
+        {/* Overlay */}
         <div className="absolute inset-0 bg-black/50"></div>
-        {/* แก้ไข: เปลี่ยน bg-linear-to-t เป็น bg-gradient-to-t ตามมาตรฐาน Tailwind */}
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
+        <div className="absolute inset-0 bg-linear-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
         
         {/* Content */}
         <div className="relative z-10 text-center px-4 md:px-8 w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-1000 mt-8">
@@ -223,7 +222,7 @@ export default function AccommodationsPage() {
         {/* Error Message */}
         {error && (
           <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-6 flex items-start gap-3">
-            <svg className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-red-800">{error}</p>
@@ -291,12 +290,14 @@ export default function AccommodationsPage() {
                 className="block bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300"
               >
                 <div className="relative w-full h-56 overflow-hidden">
-                  <img
+                  <Image
                     src={acc.images && acc.images.length > 0 ? acc.images[0] : "https://images.unsplash.com/photo-1566073771259-d3428f588a08?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"}
                     alt={acc.name}
-                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                    fill
+                    unoptimized
+                    className="object-cover transition-transform duration-300 hover:scale-105"
                   />
-                  <span className="absolute top-3 left-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+                  <span className="absolute top-3 left-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md z-10">
                     {acc.category}
                   </span>
                 </div>
@@ -304,14 +305,14 @@ export default function AccommodationsPage() {
                   <h2 className="text-xl font-bold text-gray-800 mb-2 line-clamp-2">{acc.name}</h2>
                   <p className="text-gray-600 text-sm mb-4 line-clamp-3">{acc.description}</p>
                   <div className="flex items-center text-gray-500 text-sm mb-2">
-                    <svg className="w-4 h-4 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 mr-1 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    {acc.address}
+                    <span className="truncate">{acc.address}</span>
                   </div>
                   <div className="flex items-center text-gray-700 font-semibold text-base">
-                    <svg className="w-4 h-4 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 mr-1 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zM21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
                     {acc.price_range || "สอบถามราคา"}

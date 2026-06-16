@@ -27,7 +27,7 @@ export default function DestinationsPage() {
           <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 sm:mb-6 drop-shadow-lg leading-tight">
             สถานที่ท่องเที่ยวใน<span className="text-emerald-400">โคราช</span>
           </h1>
-          <p className="text-gray-200 text-base sm:text-lg md:text-xl max-w-2xl mx-auto drop-shadow-md">
+          <p className="text-gray-200 text-base sm:text-lg md:text-xl max-w-4xl mx-auto drop-shadow-md">
             สัมผัสเสน่ห์เมืองย่าโม ค้นพบสถานที่ท่องเที่ยวสุดฮิต ที่พักสบาย และของกินเด็ดๆ ที่รอให้คุณมาสัมผัส
           </p>
         </div>

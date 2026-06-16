@@ -41,7 +41,8 @@ export async function GET(req: Request) {
  * CREATE review
  */
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  const authContext = await auth();
+  const { userId } = authContext;
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -51,22 +52,23 @@ export async function POST(req: Request) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 },
+    );
   }
 
   const { accommodation_id, restaurant_id, destination_id, rating, comment } =
     body;
 
-  const providedIds = [
-    accommodation_id,
-    restaurant_id,
-    destination_id,
-  ].filter(Boolean);
+  const providedIds = [accommodation_id, restaurant_id, destination_id].filter(
+    Boolean,
+  );
 
   if (providedIds.length !== 1) {
     return NextResponse.json(
       { error: "Please provide exactly one target ID." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -105,14 +107,27 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json();
+  // ป้องกันเซิร์ฟเวอร์พังกรณีส่ง JSON ผิดฟอร์แมต
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 },
+    );
+  }
+
   const { id, rating, comment } = body;
 
   if (!id) {
-    return NextResponse.json({ error: "Review ID is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Review ID is required." },
+      { status: 400 },
+    );
   }
 
-  // 🔥 admin check จาก Supabase (แทน currentUser)
+  // ตรวจสอบสถานะ Admin
   const { data: profile } = await supabaseAdmin
     .from("users")
     .select("role")
@@ -120,13 +135,30 @@ export async function PUT(req: Request) {
     .single();
 
   const isAdmin = profile?.role === "admin";
+  type ReviewUpdatePayload = {
+    rating?: number;
+    comment?: string;
+  };
 
-  let query = supabaseAdmin
-    .from("reviews")
-    .update({
-      rating: Number(rating),
-      comment,
-    });
+  const updatePayload: ReviewUpdatePayload = {};
+
+  if (rating !== undefined && rating !== null) {
+    updatePayload.rating = Number(rating);
+  }
+  if (comment !== undefined) {
+    updatePayload.comment = comment;
+  }
+
+  // ถ้าไม่ได้ส่งค่าอะไรมาให้อัปเดตเลย
+  if (Object.keys(updatePayload).length === 0) {
+    return NextResponse.json(
+      { error: "No data provided to update." },
+      { status: 400 },
+    );
+  }
+
+  // นำ Payload ไปอัปเดต
+  let query = supabaseAdmin.from("reviews").update(updatePayload);
 
   if (isAdmin) {
     query = query.eq("id", id);
@@ -143,7 +175,7 @@ export async function PUT(req: Request) {
   if (!data || data.length === 0) {
     return NextResponse.json(
       { error: "Review not found or permission denied." },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
@@ -164,7 +196,10 @@ export async function DELETE(req: Request) {
   const id = searchParams.get("id");
 
   if (!id) {
-    return NextResponse.json({ error: "Review ID is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Review ID is required." },
+      { status: 400 },
+    );
   }
 
   const { data: profile } = await supabaseAdmin
@@ -192,7 +227,7 @@ export async function DELETE(req: Request) {
   if (!data || data.length === 0) {
     return NextResponse.json(
       { error: "Review not found or permission denied." },
-      { status: 403 }
+      { status: 403 },
     );
   }
 

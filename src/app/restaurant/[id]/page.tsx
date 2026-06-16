@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, Trash2, Send } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
-import { useAuth, useUser } from "@clerk/nextjs"; // ✅ นำเข้า Clerk
+import { useAuth } from "@clerk/nextjs";
 
-// ✅ ปรับ Interface ของรีวิวให้ตรงกับ Database
 interface Review {
   id: number | string;
   created_by: string;
@@ -32,17 +32,14 @@ export default function RestaurantDetail() {
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const cleanId = id?.toString().trim();
 
-  // ✅ ดึงข้อมูลผู้ใช้จาก Clerk
   const { userId } = useAuth();
-  const { user } = useUser();
 
   const [restaurant, setRestaurant] = useState<RestaurantDetailData | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]); // ✅ State สำหรับเก็บรีวิว
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [mainImage, setMainImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ State สำหรับฟอร์มสร้างรีวิว
   const [ratingInput, setRatingInput] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [commentInput, setCommentInput] = useState<string>("");
@@ -75,9 +72,9 @@ export default function RestaurantDetail() {
         } else {
           setMainImage("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"); 
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("🐛 [Catch Block] เกิด Error ขึ้นระหว่างกระบวนการ:", err);
-        setError(err.message || "ไม่สามารถโหลดข้อมูลร้านอาหารได้ในขณะนี้");
+        setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลร้านอาหารได้ในขณะนี้");
       } finally {
         setLoading(false);
       }
@@ -86,27 +83,31 @@ export default function RestaurantDetail() {
     fetchRestaurantDetail();
   }, [cleanId]);
 
-  // ================= 2. ดึงข้อมูลรีวิว (เรียกผ่าน API เดียวกัน) =================
-  const fetchReviews = async () => {
-    if (!cleanId) return;
+  // ================= 2. ดึงข้อมูลรีวิว (จัดการเพื่อแก้ set-state-in-effect) =================
+  const fetchReviews = useCallback(async () => {
+    if (!cleanId) return null;
     try {
-      // ✅ ส่งพารามิเตอร์ restaurant_id ไปให้ API
       const res = await fetch(`/api/reviews?restaurant_id=${cleanId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setReviews(data);
-      } else {
+      if (!res.ok) {
         const errData = await res.json();
         console.error("❌ โหลดรีวิวไม่สำเร็จ:", errData);
+        return null;
       }
+      const data = await res.json();
+      return data;
     } catch (error) {
       console.error("Failed to fetch reviews:", error);
+      return null;
     }
-  };
+  }, [cleanId]);
 
   useEffect(() => {
-    fetchReviews();
-  }, [cleanId]);
+    const loadReviews = async () => {
+      const data = await fetchReviews();
+      if (data) setReviews(data);
+    };
+    loadReviews();
+  }, [fetchReviews]);
 
   // ================= 3. ฟังก์ชันเพิ่มรีวิว =================
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -121,7 +122,7 @@ export default function RestaurantDetail() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          restaurant_id: cleanId, // ✅ ส่ง ID ของร้านอาหาร
+          restaurant_id: cleanId,
           rating: ratingInput,
           comment: commentInput,
         }),
@@ -132,12 +133,13 @@ export default function RestaurantDetail() {
         throw new Error(errData.error || "ไม่สามารถส่งรีวิวได้");
       }
       
-      // ล้างฟอร์มและโหลดรีวิวใหม่
       setRatingInput(0);
       setCommentInput("");
-      await fetchReviews();
-    } catch (err: any) {
-      alert(err.message);
+      
+      const newData = await fetchReviews();
+      if (newData) setReviews(newData);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งรีวิว");
     } finally {
       setIsSubmitting(false);
     }
@@ -153,14 +155,12 @@ export default function RestaurantDetail() {
       });
       if (!res.ok) throw new Error("ลบรีวิวไม่สำเร็จ");
       
-      // อัปเดต UI โดยเอาตัวที่ลบออกทันที
       setReviews(reviews.filter((r) => r.id !== reviewId));
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลบรีวิว");
     }
   };
 
-  // สถานะ Loading
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -170,7 +170,6 @@ export default function RestaurantDetail() {
     );
   }
 
-  // สถานะ Error
   if (error || !restaurant) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
@@ -186,12 +185,10 @@ export default function RestaurantDetail() {
     );
   }
 
-  // คำนวณคะแนนเฉลี่ยจากรีวิวที่ดึงมา
   const avgRating = reviews.length > 0 
     ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1) 
     : 0;
 
-  // สถานะ Success
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
@@ -208,12 +205,16 @@ export default function RestaurantDetail() {
           
           {/* ================= ส่วนแสดงรูปภาพ ================= */}
           <div className="lg:col-span-7 flex flex-col gap-4">
-            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-200 border border-slate-200 shadow-sm">
-              <img 
-                src={mainImage} 
-                alt={restaurant.name} 
-                className="w-full h-full object-cover transition-opacity duration-300"
-              />
+            <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden bg-slate-200 border border-slate-200 shadow-sm">
+              {mainImage && (
+                <Image 
+                  src={mainImage} 
+                  alt={restaurant.name} 
+                  fill
+                  unoptimized
+                  className="object-cover transition-opacity duration-300"
+                />
+              )}
             </div>
             
             {restaurant.images && restaurant.images.length > 1 && (
@@ -221,6 +222,7 @@ export default function RestaurantDetail() {
                 {restaurant.images.slice(0, 5).map((img, index) => (
                   <button 
                     key={index} 
+                    type="button"
                     onClick={() => setMainImage(img)}
                     className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                       mainImage === img 
@@ -228,7 +230,13 @@ export default function RestaurantDetail() {
                         : "border-transparent opacity-60 hover:opacity-100 bg-slate-100"
                     }`}
                   >
-                    <img src={img} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+                    <Image 
+                      src={img} 
+                      alt={`Thumbnail ${index + 1}`} 
+                      fill
+                      unoptimized
+                      className="object-cover" 
+                    />
                   </button>
                 ))}
               </div>
@@ -256,7 +264,7 @@ export default function RestaurantDetail() {
                 </span>
               </div>
 
-              <p className="text-slate-600 text-lg leading-relaxed mb-8 flex-grow">
+              <p className="text-slate-600 text-lg leading-relaxed mb-8 grow">
                 {restaurant.description || "ยังไม่มีคำอธิบายสำหรับร้านนี้"}
               </p>
 
@@ -288,13 +296,11 @@ export default function RestaurantDetail() {
             <h2 className="text-2xl font-bold text-slate-900">รีวิวจากลูกค้า</h2>
           </div>
 
-          {/* ฟอร์มเขียนรีวิว */}
           <div className="mb-10 bg-slate-50 p-6 rounded-2xl border border-slate-200">
             {userId ? (
               <form onSubmit={handleSubmitReview}>
                 <h3 className="font-bold text-slate-800 mb-4">เขียนรีวิวร้านอาหารนี้</h3>
                 
-                {/* ระบบให้คะแนนดาว */}
                 <div className="flex items-center gap-1 mb-4">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
@@ -339,7 +345,6 @@ export default function RestaurantDetail() {
             )}
           </div>
           
-          {/* รายการรีวิว */}
           {reviews.length > 0 ? (
             <div className="grid md:grid-cols-2 gap-6">
               {reviews.map((review) => (
@@ -359,9 +364,9 @@ export default function RestaurantDetail() {
                       </div>
                     </div>
 
-                    {/* ปุ่มลบรีวิว */}
                     {userId === review.created_by && (
                       <button 
+                        type="button"
                         onClick={() => handleDeleteReview(review.id)}
                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
                         title="ลบรีวิวของคุณ"

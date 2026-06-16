@@ -2,6 +2,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseAdmin";
 
+interface DestinationCategory {
+  category: string | null;
+}
+
 /**
  * GET /api/categories
  * ดึงรายการหมวดหมู่พร้อมจำนวนสถานที่
@@ -19,16 +23,25 @@ export async function GET() {
     }
 
     // นับจำนวนในแต่ละหมวดหมู่
-    const categoryCounts = data.reduce((acc: any, item: any) => {
-      acc[item.category] = (acc[item.category] || 0) + 1;
-      return acc;
-    }, {});
+    const categoryCounts = data.reduce<Record<string, number>>(
+      (acc, item: DestinationCategory) => {
+        if (!item.category) return acc;
+
+        acc[item.category] = (acc[item.category] || 0) + 1;
+        return acc;
+      },
+      {},
+    );
 
     // สร้าง array พร้อม icon
     const categories = [
       { name: "ธรรมชาติ", icon: "🌳", count: categoryCounts["ธรรมชาติ"] || 0 },
       { name: "วัด", icon: "🏯", count: categoryCounts["วัด"] || 0 },
-      { name: "ร้านอาหาร", icon: "🍜", count: categoryCounts["ร้านอาหาร"] || 0 },
+      {
+        name: "ร้านอาหาร",
+        icon: "🍜",
+        count: categoryCounts["ร้านอาหาร"] || 0,
+      },
       { name: "คาเฟ่", icon: "☕", count: categoryCounts["คาเฟ่"] || 0 },
       { name: "ที่พัก", icon: "🏠", count: categoryCounts["ที่พัก"] || 0 },
       { name: "อื่นๆ", icon: "📍", count: categoryCounts["อื่นๆ"] || 0 },
@@ -39,7 +52,7 @@ export async function GET() {
     console.error("❌ Error fetching categories:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

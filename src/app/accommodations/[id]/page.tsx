@@ -1,9 +1,10 @@
 "use client";
 
-import { useUser, useAuth } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useEffect, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { MapPin, Phone, Star, ArrowLeft, MessageSquare, Trash2, Send } from "lucide-react";
 
@@ -36,7 +37,6 @@ export default function AccommodationDetail() {
   const cleanId = id?.toString().trim();
 
   const { userId } = useAuth();
-  const { user } = useUser();
 
   const [accommodation, setAccommodation] = useState<AccommodationDetailData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -63,8 +63,8 @@ export default function AccommodationDetail() {
 
         if (supaError) throw new Error("ไม่พบข้อมูลที่พัก หรือเกิดข้อผิดพลาด");
         setAccommodation(data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ");
       } finally {
         setLoading(false);
       }
@@ -72,8 +72,8 @@ export default function AccommodationDetail() {
     fetchAccommodationDetail();
   }, [cleanId]);
 
-  const fetchReviews = async () => {
-    if (!cleanId) return;
+  const fetchReviews = useCallback(async () => {
+    if (!cleanId) return null;
     try {
       const { data, error: supaError } = await supabaseClient
         .from("reviews")
@@ -81,15 +81,22 @@ export default function AccommodationDetail() {
         .eq("accommodation_id", cleanId)
         .order("created_at", { ascending: false });
 
-      if (!supaError && data) setReviews(data);
+      if (supaError) throw supaError;
+      return data; // รีเทิร์น data ออกไปแทนการ setState ตรงนี้
     } catch (error) {
       console.error("Failed to fetch reviews:", error);
+      return null;
     }
-  };
+  }, [cleanId]);
 
   useEffect(() => {
-    fetchReviews();
-  }, [cleanId]);
+    const loadReviews = async () => {
+      const data = await fetchReviews();
+      if (data) setReviews(data);
+    };
+
+    loadReviews();
+  }, [fetchReviews]);
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,15 +113,17 @@ export default function AccommodationDetail() {
           accommodation_id: cleanId,
           rating: ratingInput,
           comment: commentInput,
-          created_by: userId, // Add created_by from Clerk
+          created_by: userId,
         }),
       });
       if (!res.ok) throw new Error("ไม่สามารถส่งรีวิวได้");
       setRatingInput(0);
       setCommentInput("");
+      const newData = await fetchReviews();
+      if (newData) setReviews(newData);
       await fetchReviews();
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
       setIsSubmitting(false);
     }
@@ -126,8 +135,8 @@ export default function AccommodationDetail() {
       const res = await fetch(`/api/reviews?id=${reviewId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("ลบรีวิวไม่สำเร็จ");
       setReviews(reviews.filter((r) => r.id !== reviewId));
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     }
   };
 
@@ -175,14 +184,19 @@ export default function AccommodationDetail() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-
           {/* รูปภาพ */}
           <div className="lg:col-span-7 flex flex-col gap-4">
-            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-slate-200 border border-slate-200 shadow-sm">
+            <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden bg-slate-200 border border-slate-200 shadow-sm">
               {mainImage ? (
-                <img src={mainImage} alt={accommodation.name} className="w-full h-full object-cover transition-opacity duration-300" />
+                <Image
+                  src={mainImage}
+                  alt={accommodation.name}
+                  fill
+                  unoptimized
+                  className="object-cover transition-opacity duration-300"
+                />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                <div className="w-full h-full bg-linear-to-br from-blue-400 to-blue-600 flex items-center justify-center">
                   <svg className="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
@@ -197,13 +211,18 @@ export default function AccommodationDetail() {
                     key={index}
                     type="button"
                     onClick={() => setMainImageIndex(index)}
-                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
-                      mainImageIndex === index
+                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${mainImageIndex === index
                         ? "border-blue-500 opacity-100 shadow-md ring-2 ring-blue-500 ring-offset-1"
                         : "border-transparent opacity-60 hover:opacity-100 bg-slate-100"
-                    }`}
+                      }`}
                   >
-                    <img src={img} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+                    <Image
+                      src={img}
+                      alt={`Thumbnail ${index + 1}`}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -213,7 +232,6 @@ export default function AccommodationDetail() {
           {/* รายละเอียด */}
           <div className="lg:col-span-5 flex flex-col">
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-full flex flex-col">
-
               <div className="flex justify-between items-start mb-4">
                 <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 text-sm font-bold rounded-lg">
                   {accommodation.category}
@@ -244,7 +262,7 @@ export default function AccommodationDetail() {
                 <span className="text-slate-500 font-medium">({reviews.length} รีวิว)</span>
               </div>
 
-              <p className="text-slate-600 text-lg leading-relaxed mb-8 flex-grow whitespace-pre-line">
+              <p className="text-slate-600 text-lg leading-relaxed mb-8 grow whitespace-pre-line">
                 {accommodation.description || "ยังไม่มีคำอธิบายสำหรับที่พักนี้"}
               </p>
 
@@ -374,7 +392,6 @@ export default function AccommodationDetail() {
             </div>
           )}
         </section>
-
       </main>
     </div>
   );
