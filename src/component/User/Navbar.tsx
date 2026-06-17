@@ -12,12 +12,12 @@ const navItems = [
   { name: "สถานที่ท่องเที่ยว", href: "/destinations" },
   { name: "ของกิน", href: "/restaurant" },
   { name: "ที่พัก", href: "/accommodations" },
-  { name: "บทความ", href: "/blog" },
+  { name: "ทริปเที่ยวของฉัน", href: "/trips" },
   { name: "ติดต่อเรา", href: "/contact" },
 ];
 
 // ─── Pages ที่มี hero เข้ม (เริ่มต้นด้วย glass mode) ─────────────────────────
-const HERO_PAGES = ["/", "/dashboard", "/destinations", "/restaurant", "/accommodations", "/blog"];
+const HERO_PAGES = ["/", "/dashboard", "/destinations", "/restaurant", "/accommodations", "/trips"];
 
 export default function Navbar() {
   const pathname = usePathname();

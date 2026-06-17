@@ -174,6 +174,26 @@ export default function DestinationList() {
     setShowBudget(false);
   };
 
+const getFirstImageUrl = (data: any): string => {
+  if (!data) return "/images/default.jpg";
+  
+  try {
+    // 1. ถ้าเป็น String JSON เช่น '["url1", "url2"]'
+    if (typeof data === 'string' && data.startsWith('[')) {
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? (parsed[0] || "/images/default.jpg") : data;
+    }
+    // 2. ถ้าเป็น Array ปกติ ['url1', 'url2']
+    if (Array.isArray(data)) {
+      return data[0] || "/images/default.jpg";
+    }
+    // 3. ถ้าเป็น String URL ปกติ (ข้อมูลเก่า)
+    return data;
+  } catch {
+    return data; // ถ้า Parse พลาด ให้ส่งกลับเป็น data เดิมไป
+  }
+};
+
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -364,7 +384,7 @@ export default function DestinationList() {
                     {/* Image */}
                     <div className="relative w-full aspect-4/3 rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
                       <Image
-                        src={d.image_url || "/images/default.jpg"}
+                        src={getFirstImageUrl(d.image_url)}
                         alt={d.name}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"

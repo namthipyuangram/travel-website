@@ -50,26 +50,29 @@ export default function RestaurantList() {
     { value: "อื่นๆ", label: "อื่นๆ", icon: "📍" },
   ];
 
-  const fetchRestaurants = useCallback(async (searchTerm: string, catTerm: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append("q", searchTerm);
-      if (catTerm) params.append("category", catTerm);
+  const fetchRestaurants = useCallback(
+    async (searchTerm: string, catTerm: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        if (searchTerm) params.append("q", searchTerm);
+        if (catTerm) params.append("category", catTerm);
 
-      const res = await fetch(`/api/restaurants?${params.toString()}`);
-      if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
+        const res = await fetch(`/api/restaurants?${params.toString()}`);
+        if (!res.ok) throw new Error("ไม่สามารถดึงข้อมูลได้");
 
-      const data = await res.json();
-      setRestaurants(data);
-    } catch (err) {
-      console.error("❌ Error fetching restaurants:", err);
-      setError("เกิดข้อผิดพลาดในการโหลดข้อมูล กรุณาลองใหม่อีกครั้ง");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        const data = await res.json();
+        setRestaurants(data);
+      } catch (err) {
+        console.error("❌ Error fetching restaurants:", err);
+        setError("เกิดข้อผิดพลาดในการโหลดข้อมูล กรุณาลองใหม่อีกครั้ง");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     // Debounce delay 400ms
@@ -79,10 +82,35 @@ export default function RestaurantList() {
     return () => clearTimeout(timer);
   }, [search, category, fetchRestaurants]);
 
+  const getRestaurantImageUrl = (url: string | null | undefined): string => {
+    const defaultImage =
+      "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800";
+
+    if (!url) return defaultImage;
+
+    try {
+      // ตรวจสอบว่าเป็น JSON Array String หรือไม่ (เช่น '["url1", "url2"]')
+      if (url.trim().startsWith("[")) {
+        const parsed = JSON.parse(url);
+        return Array.isArray(parsed) && parsed.length > 0
+          ? parsed[0]
+          : defaultImage;
+      }
+    } catch (e) {
+      // ถ้า Parse ไม่ผ่าน แสดงว่าเป็น URL ปกติ
+      return url;
+    }
+
+    return url;
+  };
+
   // 🌟 Skeleton Loading สไตล์มินิมอล 4 คอลัมน์
   if (loading && restaurants.length === 0) {
     return (
-      <div id="restaurants" className="w-full max-w-[1400px] mx-auto px-6 pb-20">
+      <div
+        id="restaurants"
+        className="w-full max-w-[1400px] mx-auto px-6 pb-20"
+      >
         <div className="flex flex-col gap-6 mb-10">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="h-10 w-72 bg-neutral-200/60 rounded-lg animate-pulse"></div>
@@ -90,14 +118,20 @@ export default function RestaurantList() {
           </div>
           <div className="flex gap-3 overflow-hidden">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-10 w-28 bg-neutral-200/60 rounded-full animate-pulse shrink-0"></div>
+              <div
+                key={i}
+                className="h-10 w-28 bg-neutral-200/60 rounded-full animate-pulse shrink-0"
+              ></div>
             ))}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="bg-white rounded-[1.5rem] p-3 shadow-sm border border-neutral-100 animate-pulse">
+            <div
+              key={i}
+              className="bg-white rounded-[1.5rem] p-3 shadow-sm border border-neutral-100 animate-pulse"
+            >
               <div className="w-full aspect-[4/3] bg-neutral-200/60 rounded-[1.25rem] mb-4"></div>
               <div className="px-2 space-y-3">
                 <div className="h-5 bg-neutral-200/60 rounded-md w-3/4"></div>
@@ -118,10 +152,17 @@ export default function RestaurantList() {
   // 🚨 Error State
   if (error) {
     return (
-      <div id="restaurants" className="mt-6 w-full flex justify-center px-6 pb-20">
+      <div
+        id="restaurants"
+        className="mt-6 w-full flex justify-center px-6 pb-20"
+      >
         <div className="bg-red-50/50 border border-red-100 rounded-3xl p-10 text-center shadow-sm max-w-md w-full">
-          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">🚨</div>
-          <h3 className="text-lg font-semibold text-red-900 mb-2">เกิดข้อผิดพลาด</h3>
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
+            🚨
+          </div>
+          <h3 className="text-lg font-semibold text-red-900 mb-2">
+            เกิดข้อผิดพลาด
+          </h3>
           <p className="text-sm text-red-600/80 mb-6">{error}</p>
           <button
             onClick={() => fetchRestaurants(search, category)}
@@ -135,16 +176,21 @@ export default function RestaurantList() {
   }
 
   return (
-    <div id="restaurants" className="w-full mt-6 max-w-[1400px] mx-auto px-6 pb-20">
-      
+    <div
+      id="restaurants"
+      className="w-full mt-6 max-w-[1400px] mx-auto px-6 pb-20"
+    >
       {/* 🌟 Section Header & Filters */}
       <div className="flex flex-col gap-6 mb-10">
-        
         {/* Title & Search Pill */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-neutral-900 mb-2">ร้านอาหารแนะนำ</h2>
-            <p className="text-sm font-medium text-neutral-500">ค้นพบร้านอาหารอร่อยๆ ในโคราช</p>
+            <h2 className="text-3xl font-bold text-neutral-900 mb-2">
+              ร้านอาหารแนะนำ
+            </h2>
+            <p className="text-sm font-medium text-neutral-500">
+              ค้นพบร้านอาหารอร่อยๆ ในโคราช
+            </p>
           </div>
 
           <div className="w-full lg:w-auto">
@@ -158,7 +204,7 @@ export default function RestaurantList() {
                 className="w-full bg-transparent text-sm font-medium text-neutral-700 outline-none placeholder:text-neutral-400"
               />
               {search && (
-                <button 
+                <button
                   onClick={() => setSearch("")}
                   className="ml-2 text-neutral-400 hover:text-neutral-600 text-xs font-bold"
                 >
@@ -195,10 +241,17 @@ export default function RestaurantList() {
       {restaurants.length === 0 ? (
         <div className="bg-white rounded-[2rem] p-16 text-center border border-neutral-100 shadow-sm flex flex-col items-center">
           <div className="text-4xl mb-4 opacity-50">🍳</div>
-          <h4 className="text-lg font-medium text-neutral-900 mb-2">ไม่พบร้านอาหารที่คุณค้นหา</h4>
-          <p className="text-sm text-neutral-500 mb-6">ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่ใหม่ดูสิ</p>
+          <h4 className="text-lg font-medium text-neutral-900 mb-2">
+            ไม่พบร้านอาหารที่คุณค้นหา
+          </h4>
+          <p className="text-sm text-neutral-500 mb-6">
+            ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่ใหม่ดูสิ
+          </p>
           <button
-            onClick={() => { setSearch(""); setCategory(""); }}
+            onClick={() => {
+              setSearch("");
+              setCategory("");
+            }}
             className="px-6 py-2.5 bg-neutral-900 text-white rounded-full text-sm font-medium hover:bg-black transition-colors"
           >
             ล้างตัวกรองทั้งหมด
@@ -213,21 +266,24 @@ export default function RestaurantList() {
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative"
         >
           {loading && (
-             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 rounded-3xl" />
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 rounded-3xl" />
           )}
-          
+
           {restaurants.map((r) => {
-            const catInfo = categories.find((c) => c.value === r.category) || categories[0];
+            const catInfo =
+              categories.find((c) => c.value === r.category) || categories[0];
 
             return (
               <motion.div variants={itemVariants} key={r.id}>
-                <Link href={`/restaurant/${r.id}`} className="block outline-none group h-full">
+                <Link
+                  href={`/restaurant/${r.id}`}
+                  className="block outline-none group h-full"
+                >
                   <div className="bg-white rounded-[1.5rem] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-100/60 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
-                    
                     {/* Image Section */}
                     <div className="relative w-full aspect-[4/3] rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
                       <Image
-                        src={r.image_url || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"}
+                        src={getRestaurantImageUrl(r.image_url)}
                         alt={r.name}
                         fill
                         unoptimized={true} // ป้องกัน Error หากดึงรูปจาก External URL ที่ไม่ได้ตั้งค่าใน next.config.js
@@ -235,7 +291,7 @@ export default function RestaurantList() {
                         className="object-cover group-hover:scale-105 transition-transform duration-700 ease-[0.16,1,0.3,1]"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                      
+
                       {/* Badge Top Left */}
                       <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold text-neutral-900 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20 flex items-center gap-1.5">
                         <span>{catInfo.icon}</span>
@@ -244,7 +300,9 @@ export default function RestaurantList() {
 
                       {/* Favorite Button Top Right */}
                       <button
-                        onClick={(e) => { e.preventDefault(); }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                        }}
                         className="absolute top-3 right-3 w-8 h-8 bg-white/95 backdrop-blur-md rounded-full flex items-center justify-center text-neutral-400 hover:text-red-500 hover:scale-110 active:scale-95 transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20 z-10"
                       >
                         <Heart className="w-4 h-4" />
@@ -263,16 +321,19 @@ export default function RestaurantList() {
                       <div className="pt-3 border-t border-neutral-100 flex items-center justify-between mt-auto">
                         <p className="text-sm text-neutral-500 flex items-center gap-1.5 font-medium">
                           <MapPin className="w-3.5 h-3.5 opacity-70" />
-                          <span className="truncate max-w-[140px]">{r.location}</span>
+                          <span className="truncate max-w-[140px]">
+                            {r.location}
+                          </span>
                         </p>
-                        
+
                         <div className="flex items-center gap-1">
                           <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                          <span className="text-sm font-bold text-neutral-900">4.5</span>
+                          <span className="text-sm font-bold text-neutral-900">
+                            4.5
+                          </span>
                         </div>
                       </div>
                     </div>
-
                   </div>
                 </Link>
               </motion.div>

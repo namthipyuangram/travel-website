@@ -1,10 +1,16 @@
+// src/app/restaurant/[id]/page.tsx (หรือ path ของคุณ)
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
-import { MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, Trash2, Send } from "lucide-react";
+import { 
+  MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, 
+  Trash2, Send, Share, Heart, Utensils, Info, CheckCircle2
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { motion } from "framer-motion";
 
 interface Review {
   id: number | string;
@@ -22,9 +28,30 @@ interface RestaurantDetailData {
   location: string;
   phone?: string; 
   hours?: string; 
-  images?: string[]; 
-  image_url?: string;
+  image_url?: [];
 }
+
+const getParsedImages = (data: any): string[] => {
+  const defaultImg =
+    "https://images.unsplash.com/photo-1566073771259-d3428f588a08?w=1200";
+  if (!data) return [defaultImg];
+
+  try {
+    if (typeof data === "string" && data.startsWith("[")) {
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : [defaultImg];
+    }
+    if (Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+    if (typeof data === "string") {
+      return [data];
+    }
+    return [defaultImg];
+  } catch {
+    return [defaultImg];
+  }
+};
 
 export default function RestaurantDetail() {
   const params = useParams();
@@ -36,7 +63,6 @@ export default function RestaurantDetail() {
 
   const [restaurant, setRestaurant] = useState<RestaurantDetailData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [mainImage, setMainImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,8 +70,8 @@ export default function RestaurantDetail() {
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [commentInput, setCommentInput] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
-  // ================= 1. ดึงข้อมูลร้านอาหาร =================
   useEffect(() => {
     const fetchRestaurantDetail = async () => {
       if (!cleanId) return;
@@ -63,15 +89,6 @@ export default function RestaurantDetail() {
         
         const data: RestaurantDetailData = await res.json();
         setRestaurant(data);
-        
-        // เช็คการแสดงผลรูปภาพ
-        if (data.images && data.images.length > 0) {
-          setMainImage(data.images[0]);
-        } else if (data.image_url) {
-          setMainImage(data.image_url);
-        } else {
-          setMainImage("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800"); 
-        }
       } catch (err: unknown) {
         console.error("🐛 [Catch Block] เกิด Error ขึ้นระหว่างกระบวนการ:", err);
         setError(err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลร้านอาหารได้ในขณะนี้");
@@ -83,7 +100,7 @@ export default function RestaurantDetail() {
     fetchRestaurantDetail();
   }, [cleanId]);
 
-  // ================= 2. ดึงข้อมูลรีวิว (จัดการเพื่อแก้ set-state-in-effect) =================
+  // ================= 2. ดึงข้อมูลรีวิว =================
   const fetchReviews = useCallback(async () => {
     if (!cleanId) return null;
     try {
@@ -161,24 +178,42 @@ export default function RestaurantDetail() {
     }
   };
 
+  // 🌟 Premium Skeleton Loading
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-4 border-slate-200 border-t-sky-600 rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-500 font-medium animate-pulse">กำลังโหลดข้อมูลร้านอาหาร...</p>
+      <div className="min-h-screen bg-white max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+        <div className="h-6 w-32 bg-neutral-200 rounded-md animate-pulse mb-6"></div>
+        <div className="h-10 w-3/4 bg-neutral-200 rounded-lg animate-pulse mb-4"></div>
+        <div className="flex gap-4 mb-8">
+          <div className="h-5 w-24 bg-neutral-200 rounded-md animate-pulse"></div>
+          <div className="h-5 w-32 bg-neutral-200 rounded-md animate-pulse"></div>
+        </div>
+        <div className="w-full h-[50vh] bg-neutral-200 rounded-2xl animate-pulse mb-8"></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="h-6 w-full bg-neutral-200 rounded-md animate-pulse"></div>
+            <div className="h-6 w-5/6 bg-neutral-200 rounded-md animate-pulse"></div>
+          </div>
+          <div className="lg:col-span-1">
+            <div className="w-full h-64 bg-neutral-200 rounded-2xl animate-pulse"></div>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // 🚨 Error State
   if (error || !restaurant) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 text-center max-w-md w-full">
-          <p className="text-6xl mb-4">🥲</p>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">เกิดข้อผิดพลาด</h2>
-          <p className="text-slate-500 mb-8">{error}</p>
-          <Link href="/" className="inline-flex items-center justify-center w-full px-6 py-3 bg-sky-600 text-white font-medium rounded-xl hover:bg-sky-700 transition-colors shadow-sm">
-            กลับไปหน้าหลัก
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-4">
+        <div className="bg-white p-10 rounded-[2rem] shadow-sm border border-neutral-100 text-center max-w-md w-full">
+          <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
+            🥲
+          </div>
+          <h2 className="text-2xl font-bold text-neutral-900 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-neutral-500 mb-8 leading-relaxed">{error || "ไม่พบข้อมูลร้านอาหาร"}</p>
+          <Link href="/restaurant" className="inline-flex items-center justify-center w-full px-8 py-3.5 bg-neutral-900 text-white font-semibold rounded-full hover:bg-black transition-colors shadow-lg shadow-neutral-900/20 active:scale-95">
+            กลับไปหน้ารวมร้านอาหาร
           </Link>
         </div>
       </div>
@@ -187,205 +222,274 @@ export default function RestaurantDetail() {
 
   const avgRating = reviews.length > 0 
     ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1) 
-    : 0;
+    : "0.0";
+  
+  // แปลงรูปภาพทั้งหมดให้ออกมาเป็น Array ที่พร้อมแสดงผล
+  const images = getParsedImages(restaurant.image_url);
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <Link href="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-sky-600 transition font-medium">
-            <ArrowLeft className="w-5 h-5" />
-            <span>กลับไปหน้ารวมร้านอาหาร</span>
+    <div className="min-h-screen bg-white pb-24">
+      
+      {/* 🌟 Top Navigation */}
+      <nav className="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-neutral-100/80 transition-all">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <Link href="/restaurant" className="inline-flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition font-medium group">
+            <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-neutral-100 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </div>
+            <span className="hidden sm:block">กลับไปหน้ารวมร้านอาหาร</span>
           </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 hover:bg-neutral-50 rounded-full font-medium text-sm text-neutral-700 transition">
+              <Share className="w-4 h-4" /> <span className="hidden sm:block">แชร์</span>
+            </button>
+            <button 
+              onClick={() => setIsSaved(!isSaved)}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 hover:bg-neutral-50 rounded-full font-medium text-sm text-neutral-700 transition"
+            >
+              <Heart className={`w-4 h-4 transition-colors ${isSaved ? "fill-rose-500 text-rose-500" : ""}`} /> 
+              <span className="hidden sm:block">บันทึก</span>
+            </button>
+          </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
-          {/* ================= ส่วนแสดงรูปภาพ ================= */}
-          <div className="lg:col-span-7 flex flex-col gap-4">
-            <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden bg-slate-200 border border-slate-200 shadow-sm">
-              {mainImage && (
-                <Image 
-                  src={mainImage} 
-                  alt={restaurant.name} 
-                  fill
-                  unoptimized
-                  className="object-cover transition-opacity duration-300"
-                />
-              )}
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+        
+        {/* 🌟 Header Section */}
+        <div className="mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-neutral-900 mb-4 tracking-tight leading-tight">
+            {restaurant.name}
+          </h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-neutral-700">
+            {reviews.length > 0 && (
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span className="font-bold">{avgRating}</span>
+                <span className="underline cursor-pointer hover:text-neutral-500">· {reviews.length} รีวิว</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 before:content-['·'] before:mr-2 before:text-neutral-300">
+              <Utensils className="w-4 h-4 text-orange-600" />
+              <span className="font-bold text-orange-700 bg-orange-50 px-2.5 py-0.5 rounded-md">
+                {restaurant.category || "ทั่วไป"}
+              </span>
             </div>
-            
-            {restaurant.images && restaurant.images.length > 1 && (
-              <div className="grid grid-cols-5 gap-3">
-                {restaurant.images.slice(0, 5).map((img, index) => (
-                  <button 
-                    key={index} 
-                    type="button"
-                    onClick={() => setMainImage(img)}
-                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
-                      mainImage === img 
-                        ? "border-sky-500 opacity-100 shadow-md ring-2 ring-sky-500 ring-offset-1" 
-                        : "border-transparent opacity-60 hover:opacity-100 bg-slate-100"
-                    }`}
-                  >
-                    <Image 
-                      src={img} 
-                      alt={`Thumbnail ${index + 1}`} 
-                      fill
-                      unoptimized
-                      className="object-cover" 
-                    />
-                  </button>
-                ))}
+            {restaurant.location && (
+              <div className="flex items-center gap-1 underline cursor-pointer hover:text-neutral-500 before:content-['·'] before:mr-2 before:text-neutral-300 before:no-underline">
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span className="truncate max-w-[200px] sm:max-w-none">{restaurant.location}</span>
               </div>
             )}
           </div>
+        </div>
 
-          {/* ================= ส่วนแสดงรายละเอียด ================= */}
-          <div className="lg:col-span-5 flex flex-col">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-full flex flex-col">
-              <div className="mb-4">
-                <span className="inline-block px-3 py-1 bg-sky-100 text-sky-700 text-sm font-bold rounded-lg">
-                  {restaurant.category || "ทั่วไป"}
-                </span>
+        {/* 🌟 Premium Image Gallery */}
+        <div className="w-full h-[40vh] md:h-[50vh] lg:h-[60vh] relative rounded-3xl overflow-hidden mb-12 flex gap-2">
+          {/* Main Large Image */}
+          <div className="relative w-full md:w-1/2 h-full cursor-pointer group">
+            <Image
+              src={images[0]}
+              alt={restaurant.name}
+              fill
+              unoptimized
+              className="object-cover group-hover:brightness-95 transition-all duration-300"
+            />
+          </div>
+          {/* Grid Small Images (Desktop Only) */}
+          <div className="hidden md:grid w-1/2 h-full grid-cols-2 grid-rows-2 gap-2">
+            {[1, 2, 3, 4].map((idx) => (
+              <div key={idx} className="relative w-full h-full cursor-pointer group overflow-hidden bg-neutral-100">
+                <Image
+                  src={images[idx] || images[0]} // Fallback to main if not enough images
+                  alt={`Gallery ${idx}`}
+                  fill
+                  unoptimized
+                  className="object-cover group-hover:scale-105 group-hover:brightness-95 transition-all duration-500"
+                />
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 🌟 Content Split */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
+          
+          {/* ฝั่งซ้าย: ข้อมูลร้าน */}
+          <div className="lg:col-span-8 flex flex-col">
+            <h2 className="text-2xl font-bold text-neutral-900 mb-4 pb-4 border-b border-neutral-200 flex items-center gap-2">
+              <Info className="w-6 h-6 text-neutral-400" />
+              เรื่องราวของร้าน
+            </h2>
+            <div className="prose prose-neutral max-w-none text-neutral-600 leading-loose mb-10 whitespace-pre-line text-[1.05rem]">
+              {restaurant.description || "ยินดีต้อนรับสู่ร้านของเรา! มาร่วมสัมผัสประสบการณ์ความอร่อยได้ที่นี่ (ยังไม่มีข้อมูลรายละเอียดเพิ่มเติม)"}
+            </div>
+          </div>
+
+          {/* ฝั่งขวา: Sticky Contact Card */}
+          <div className="lg:col-span-4">
+            <div className="sticky top-28 bg-white p-6 rounded-3xl border border-neutral-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+              <h3 className="text-xl font-bold text-neutral-900 mb-6">ข้อมูลสถานที่</h3>
               
-              <h1 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">{restaurant.name}</h1>
-              
-              <div className="flex items-center gap-2 mb-6">
-                <div className="flex text-amber-400">
-                  <Star className="w-5 h-5 fill-current" />
-                  <span className="ml-1 text-slate-700 font-bold">{avgRating}</span>
-                </div>
-                <span className="text-slate-500 font-medium">
-                  ({reviews.length} รีวิว)
-                </span>
-              </div>
-
-              <p className="text-slate-600 text-lg leading-relaxed mb-8 grow">
-                {restaurant.description || "ยังไม่มีคำอธิบายสำหรับร้านนี้"}
-              </p>
-
-              <hr className="border-slate-100 mb-8" />
-
-              <div className="space-y-5 text-slate-700 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <h3 className="font-bold text-lg text-slate-900 mb-2">ข้อมูลสถานที่และการติดต่อ</h3>
+              <div className="space-y-5 mb-8">
                 <div className="flex items-start gap-4">
-                  <div className="p-2 bg-white rounded-lg shadow-sm text-sky-600 shrink-0"><MapPin className="w-5 h-5" /></div>
-                  <p className="mt-1 leading-relaxed">{restaurant.location || "ไม่ได้ระบุที่อยู่"}</p>
+                  <div className="p-2.5 bg-neutral-50 rounded-xl text-neutral-700 shrink-0">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 mb-0.5">เวลาเปิด-ปิด</p>
+                    <p className="font-semibold text-neutral-900">{restaurant.hours || "ไม่ได้ระบุ"}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-white rounded-lg shadow-sm text-sky-600 shrink-0"><Clock className="w-5 h-5" /></div>
-                  <p className="font-medium">{restaurant.hours || "ไม่ได้ระบุเวลาเปิด-ปิด"}</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-white rounded-lg shadow-sm text-sky-600 shrink-0"><Phone className="w-5 h-5" /></div>
-                  <p className="font-medium">{restaurant.phone || "ไม่มีเบอร์ติดต่อ"}</p>
+
+                <div className="flex items-start gap-4">
+                  <div className="p-2.5 bg-neutral-50 rounded-xl text-neutral-700 shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 mb-0.5">ที่ตั้ง</p>
+                    <p className="font-semibold text-neutral-900 leading-relaxed">{restaurant.location || "ไม่ได้ระบุ"}</p>
+                  </div>
                 </div>
               </div>
+
+              {restaurant.phone ? (
+                <a href={`tel:${restaurant.phone}`} className="flex items-center justify-center gap-2 w-full py-4 bg-neutral-900 text-white font-bold rounded-xl hover:bg-black transition active:scale-[0.98] shadow-lg shadow-neutral-900/10">
+                  <Phone className="w-5 h-5" /> โทรจองโต๊ะเลย
+                </a>
+              ) : (
+                <div className="w-full py-4 bg-neutral-100 text-neutral-400 font-bold rounded-xl text-center flex items-center justify-center gap-2 cursor-not-allowed">
+                  <Phone className="w-5 h-5" /> ไม่มีเบอร์โทรศัพท์
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ================= ส่วนแสดงรีวิว & ฟอร์ม ================= */}
-        <section className="mt-12 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3 mb-8">
-            <MessageSquare className="w-8 h-8 text-sky-600" />
-            <h2 className="text-2xl font-bold text-slate-900">รีวิวจากลูกค้า</h2>
-          </div>
-
-          <div className="mb-10 bg-slate-50 p-6 rounded-2xl border border-slate-200">
-            {userId ? (
-              <form onSubmit={handleSubmitReview}>
-                <h3 className="font-bold text-slate-800 mb-4">เขียนรีวิวร้านอาหารนี้</h3>
-                
-                <div className="flex items-center gap-1 mb-4">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setRatingInput(star)}
-                      onMouseEnter={() => setHoverRating(star)}
-                      onMouseLeave={() => setHoverRating(0)}
-                      className="focus:outline-none transition-transform hover:scale-110"
-                    >
-                      <Star 
-                        className={`w-8 h-8 ${(hoverRating || ratingInput) >= star ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} 
-                      />
-                    </button>
-                  ))}
-                  <span className="ml-3 text-sm text-slate-500">{ratingInput > 0 ? `${ratingInput} ดาว` : "เลือกคะแนน"}</span>
-                </div>
-
-                <textarea
-                  value={commentInput}
-                  onChange={(e) => setCommentInput(e.target.value)}
-                  placeholder="แบ่งปันความอร่อยและความประทับใจของคุณที่นี่..."
-                  className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none resize-none mb-4"
-                  rows={3}
-                  required
-                ></textarea>
-                
-                <div className="flex justify-end">
-                  <button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="flex items-center gap-2 px-6 py-3 bg-sky-600 text-white font-medium rounded-xl hover:bg-sky-700 transition disabled:bg-slate-400"
-                  >
-                    {isSubmitting ? "กำลังส่ง..." : "ส่งรีวิว"} <Send className="w-4 h-4" />
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-slate-600 mb-4">กรุณาเข้าสู่ระบบเพื่อเขียนรีวิวร้านอาหารนี้</p>
-              </div>
-            )}
-          </div>
+        {/* ================= 🌟 Premium Review Section ================= */}
+        <section className="mt-16 pt-16 border-t border-neutral-200">
           
-          {reviews.length > 0 ? (
-            <div className="grid md:grid-cols-2 gap-6">
-              {reviews.map((review) => (
-                <div key={review.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition group">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-sky-100 text-sky-700 rounded-full flex items-center justify-center font-bold">
-                        {review.created_by?.substring(0, 2).toUpperCase() || "U"}
-                      </div>
-                      <div>
-                        <div className="flex text-amber-400">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className={`w-4 h-4 ${i < review.rating ? "fill-current" : "text-slate-200"}`} />
-                          ))}
+          <div className="flex items-center gap-3 mb-10">
+            <Star className="w-8 h-8 fill-neutral-900 text-neutral-900" />
+            <h2 className="text-3xl font-extrabold text-neutral-900">
+              {reviews.length > 0 ? `${avgRating} · ${reviews.length} รีวิว` : "รีวิวจากลูกค้า"}
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+            
+            {/* ฝั่งซ้าย: List Reviews */}
+            <div className="lg:col-span-7 order-2 lg:order-1">
+              {reviews.length > 0 ? (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-6">
+                  {reviews.map((review) => (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      key={review.id} 
+                      className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] group relative"
+                    >
+                      {userId === review.created_by && (
+                        <button 
+                          onClick={() => handleDeleteReview(review.id)} 
+                          className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full transition opacity-0 group-hover:opacity-100" 
+                          title="ลบรีวิวของคุณ"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className="w-12 h-12 bg-neutral-900 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-sm">
+                          {review.created_by?.substring(0, 1).toUpperCase() || "U"}
                         </div>
-                        <span className="text-xs text-slate-400">{new Date(review.created_at).toLocaleDateString("th-TH")}</span>
+                        <div>
+                          <div className="font-bold text-neutral-900">ลูกค้าไม่ประสงค์ออกนาม</div>
+                          <div className="text-sm text-neutral-500">
+                            {new Date(review.created_at).toLocaleDateString("th-TH", { month: "long", year: "numeric" })}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex mb-4">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={`w-4 h-4 ${i < review.rating ? "fill-amber-400 text-amber-400" : "text-neutral-200"}`} />
+                        ))}
+                      </div>
+
+                      <p className="text-neutral-700 leading-relaxed">{review.comment}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-left py-8">
+                  <p className="text-neutral-500 text-lg">เป็นคนแรกที่แชร์ความอร่อยและความประทับใจของร้านนี้สิ!</p>
+                </div>
+              )}
+            </div>
+
+            {/* ฝั่งขวา: Write Review Form */}
+            <div className="lg:col-span-5 order-1 lg:order-2">
+              <div className="bg-neutral-50 p-8 rounded-3xl border border-neutral-100 sticky top-28">
+                {userId ? (
+                  <form onSubmit={handleSubmitReview}>
+                    <h3 className="text-xl font-bold text-neutral-900 mb-6 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-neutral-400" />
+                      เขียนรีวิวร้านอาหารนี้
+                    </h3>
+                    
+                    <div className="mb-6">
+                      <label className="block text-sm font-medium text-neutral-700 mb-3">คุณให้คะแนนร้านนี้เท่าไหร่?</label>
+                      <div className="flex items-center gap-1.5">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button 
+                            key={star} 
+                            type="button" 
+                            onClick={() => setRatingInput(star)} 
+                            onMouseEnter={() => setHoverRating(star)} 
+                            onMouseLeave={() => setHoverRating(0)} 
+                            className="focus:outline-none transition-transform hover:scale-110"
+                          >
+                            <Star className={`w-9 h-9 ${(hoverRating || ratingInput) >= star ? "fill-amber-400 text-amber-400" : "text-neutral-300"}`} />
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    {userId === review.created_by && (
-                      <button 
-                        type="button"
-                        onClick={() => handleDeleteReview(review.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
-                        title="ลบรีวิวของคุณ"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <div className="mb-6">
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">เล่าประสบการณ์ของคุณ</label>
+                      <textarea 
+                        value={commentInput} 
+                        onChange={(e) => setCommentInput(e.target.value)} 
+                        placeholder="รสชาติอาหารเป็นอย่างไร? บรรยากาศและการบริการดีไหม? แชร์ให้ทุกคนรู้เลย..." 
+                        className="w-full p-4 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none bg-white transition text-neutral-800" 
+                        rows={4} 
+                        required
+                      />
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      disabled={isSubmitting} 
+                      className="flex w-full justify-center items-center gap-2 px-6 py-3.5 bg-neutral-900 text-white font-bold rounded-xl hover:bg-black transition active:scale-[0.98] disabled:bg-neutral-300 disabled:cursor-not-allowed shadow-lg shadow-neutral-900/20"
+                    >
+                      {isSubmitting ? "กำลังส่งรีวิว..." : "ส่งรีวิวของคุณ"}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="text-center py-10">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-2xl">🔒</div>
+                    <h3 className="text-lg font-bold text-neutral-900 mb-2">เข้าสู่ระบบเพื่อรีวิว</h3>
+                    <p className="text-neutral-500 mb-6 text-sm">คุณจำเป็นต้องเข้าสู่ระบบเพื่อแชร์ประสบการณ์และรีวิวร้านอาหารนี้</p>
+                    <button className="px-6 py-3 bg-neutral-900 text-white font-bold rounded-full w-full hover:bg-black transition shadow-md">
+                      เข้าสู่ระบบ / สมัครสมาชิก
+                    </button>
                   </div>
-                  <p className="text-slate-700 leading-relaxed">{review.comment}</p>
-                </div>
-              ))}
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="text-center py-12 px-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50">
-              <p className="text-slate-400 mb-2 text-4xl">⭐</p>
-              <h3 className="text-lg font-bold text-slate-700 mb-1">ยังไม่มีรีวิว</h3>
-              <p className="text-slate-500">แวะไปทานแล้วอย่าลืมมาให้คะแนนร้านนี้นะ!</p>
-            </div>
-          )}
+
+          </div>
         </section>
 
       </main>

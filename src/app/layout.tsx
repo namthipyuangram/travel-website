@@ -32,8 +32,6 @@ export default function RootLayout({
         >
           {/* ส่วนเนื้อหาหลักของแต่ละหน้า */}
           <main>{children}</main>
-
-          {/* ✅ Toaster อยู่ท้าย body เพื่อให้แสดงได้ทั่วแอป */}
           <Toaster position="top-right" />
         </body>
       </html>

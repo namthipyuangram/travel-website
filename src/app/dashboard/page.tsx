@@ -1,7 +1,7 @@
 import Navbar from "../../component/User/Navbar";
 import HeroSection from "../../component/HeroSection";
 import CategorySection from "../../component/User/CategorySection";
-import DestinationList from "../../component/User/DestinationList";
+import BudgetTripPlanner from "../../component/BudgetTripPlanner";
 import Footer from "../../component/Footer";
 
 export default async function DashboardPage() {
@@ -12,7 +12,7 @@ export default async function DashboardPage() {
 
       <section className="min-w-7xl mx-auto px-4 py-8 bg-gradient-to-br from-amber-50 to-orange-50">
         <CategorySection />
-        <DestinationList />
+        <BudgetTripPlanner />
       </section>
 
       <Footer />

@@ -1,6 +1,6 @@
 import { supabaseClient } from "@/lib/supabaseClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 /**
@@ -98,6 +98,21 @@ export async function POST(req: Request) {
 }
 
 /**
+ * Helper: เช็คว่า user คนนี้เป็น admin หรือไม่ จาก Clerk publicMetadata
+ * (ระบบนี้เก็บ role ไว้ใน Clerk ไม่ได้เก็บใน Supabase table "users")
+ */
+async function checkIsAdmin(userId: string): Promise<boolean> {
+  try {
+    const client = await clerkClient();
+    const clerkUser = await client.users.getUser(userId);
+    return clerkUser.publicMetadata?.role === "admin";
+  } catch (error) {
+    console.error("checkIsAdmin error:", error);
+    return false;
+  }
+}
+
+/**
  * UPDATE review
  */
 export async function PUT(req: Request) {
@@ -127,14 +142,9 @@ export async function PUT(req: Request) {
     );
   }
 
-  // ตรวจสอบสถานะ Admin
-  const { data: profile } = await supabaseAdmin
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .single();
+  // ตรวจสอบสถานะ Admin จาก Clerk publicMetadata
+  const isAdmin = await checkIsAdmin(userId);
 
-  const isAdmin = profile?.role === "admin";
   type ReviewUpdatePayload = {
     rating?: number;
     comment?: string;
@@ -202,13 +212,8 @@ export async function DELETE(req: Request) {
     );
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .single();
-
-  const isAdmin = profile?.role === "admin";
+  // ตรวจสอบสถานะ Admin จาก Clerk publicMetadata
+  const isAdmin = await checkIsAdmin(userId);
 
   let query = supabaseAdmin.from("reviews").delete();
 

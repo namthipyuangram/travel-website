@@ -1,8 +1,9 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Accommodation {
   id: string;
@@ -10,8 +11,8 @@ interface Accommodation {
   description: string;
   address: string;
   price_range: string;
-  min_price: number | null; 
-  max_price: number | null; 
+  min_price: number | null;
+  max_price: number | null;
   category: string;
   contact_phone: string;
   contact_line: string;
@@ -35,14 +36,13 @@ export function AddAccommodationModal({
   editAccommodation,
 }: AddAccommodationModalProps) {
   const { user } = useUser();
-  
-  // ✅ State เก็บค่าเป็น String เพื่อให้จัดการ Input ได้ง่าย (เช่น การลบจนว่างเปล่า)
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     address: "",
-    min_price: "", // ใช้ string รับค่า input
-    max_price: "", // ใช้ string รับค่า input
+    min_price: "",
+    max_price: "",
     category: "หอพัก",
     contact_phone: "",
     contact_line: "",
@@ -55,16 +55,28 @@ export function AddAccommodationModal({
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // ✅ โหลดข้อมูลเมื่อเป็นโหมดแก้ไข
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (editAccommodation) {
       setFormData({
         name: editAccommodation.name,
         description: editAccommodation.description || "",
         address: editAccommodation.address || "",
-        min_price: editAccommodation.min_price ? editAccommodation.min_price.toString() : "", // แปลงเป็น string
-        max_price: editAccommodation.max_price ? editAccommodation.max_price.toString() : "", // แปลงเป็น string
+        min_price: editAccommodation.min_price ? editAccommodation.min_price.toString() : "",
+        max_price: editAccommodation.max_price ? editAccommodation.max_price.toString() : "",
         category: editAccommodation.category,
         contact_phone: editAccommodation.contact_phone || "",
         contact_line: editAccommodation.contact_line || "",
@@ -74,7 +86,7 @@ export function AddAccommodationModal({
     } else {
       resetForm();
     }
-  }, [editAccommodation]);
+  }, [editAccommodation, isOpen]);
 
   const resetForm = () => {
     setFormData({
@@ -94,16 +106,14 @@ export function AddAccommodationModal({
     setError(null);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
+  const processFiles = useCallback((files: File[]) => {
     const totalImages = existingImages.length + imageFiles.length + files.length;
     if (totalImages > 5) {
       setError("สามารถอัปโหลดได้สูงสุด 5 รูปเท่านั้น");
       return;
     }
 
+    const validFiles: File[] = [];
     for (const file of files) {
       if (file.size > 5 * 1024 * 1024) {
         setError("แต่ละไฟล์ต้องมีขนาดไม่เกิน 5MB");
@@ -113,18 +123,41 @@ export function AddAccommodationModal({
         setError("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
         return;
       }
+      validFiles.push(file);
     }
 
     setError(null);
-    setImageFiles((prev) => [...prev, ...files]);
+    setImageFiles((prev) => [...prev, ...validFiles]);
 
-    files.forEach((file) => {
+    validFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreviews((prev) => [...prev, reader.result as string]);
       };
       reader.readAsDataURL(file);
     });
+  }, [existingImages.length, imageFiles.length]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) processFiles(files);
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) processFiles(files);
   };
 
   const removeNewImage = (index: number) => {
@@ -165,18 +198,17 @@ export function AddAccommodationModal({
     e.preventDefault();
     if (!user) return;
 
-    // ✅ Validation: ตรวจสอบราคา
     if (!formData.min_price) {
-        setError("กรุณาระบุราคาเริ่มต้น");
-        return;
+      setError("กรุณาระบุราคาเริ่มต้น");
+      return;
     }
 
     const min = parseInt(formData.min_price);
     const max = formData.max_price ? parseInt(formData.max_price) : null;
 
     if (max !== null && min > max) {
-        setError("ราคาเริ่มต้นต้องไม่มากกว่าราคาสูงสุด");
-        return;
+      setError("ราคาเริ่มต้นต้องไม่มากกว่าราคาสูงสุด");
+      return;
     }
 
     try {
@@ -186,24 +218,21 @@ export function AddAccommodationModal({
       const newImageUrls = await uploadImages();
       const allImages = [...existingImages, ...newImageUrls];
 
-      // ✅ Prepare Data & Convert Types
       const payload = {
-          name: formData.name,
-          description: formData.description,
-          address: formData.address,
-          category: formData.category,
-          contact_phone: formData.contact_phone,
-          contact_line: formData.contact_line,
-          contact_facebook: formData.contact_facebook,
-          min_price: min,
-          max_price: max,
-          // สร้าง string price_range อัตโนมัติ (เช่น "3000-5000" หรือ "3000+")
-          price_range: max ? `${min}-${max}` : `${min}+`, 
-          images: allImages.length > 0 ? allImages : null,
+        name: formData.name,
+        description: formData.description,
+        address: formData.address,
+        category: formData.category,
+        contact_phone: formData.contact_phone,
+        contact_line: formData.contact_line,
+        contact_facebook: formData.contact_facebook,
+        min_price: min,
+        max_price: max,
+        price_range: max ? `${min}-${max}` : `${min}+`,
+        images: allImages.length > 0 ? allImages : null,
       };
 
       if (editAccommodation) {
-        // UPDATE
         const { error: updateError } = await supabaseClient
           .from("accommodations")
           .update(payload)
@@ -211,7 +240,6 @@ export function AddAccommodationModal({
 
         if (updateError) throw updateError;
       } else {
-        // INSERT
         const { error: insertError } = await supabaseClient
           .from("accommodations")
           .insert({
@@ -226,242 +254,252 @@ export function AddAccommodationModal({
       onSuccess();
       onClose();
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการบันทึก";
+      const errorMessage = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการบันทึก";
       setError(errorMessage);
-      console.error("Error saving accommodation:", err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
-
   const totalImages = existingImages.length + imageFiles.length;
   const canAddMoreImages = totalImages < 5;
 
   return (
-    <div className="fixed inset-0 bg-black/60 bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            {editAccommodation ? "แก้ไขที่พัก" : "เพิ่มที่พักใหม่"}
-          </h2>
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              resetForm();
+              onClose();
+            }}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+          />
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-red-800">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Image Upload Section */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                รูปภาพที่พัก (สูงสุด 5 รูป)
-              </label>
-              
-              {(existingImages.length > 0 || imagePreviews.length > 0) && (
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {existingImages.map((image, index) => (
-                    <div key={`existing-${index}`} className="relative group">
-                      <img
-                        src={image}
-                        alt={`Existing ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg border-2 border-gray-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeExistingImage(index)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                      >
-                        ✕
-                      </button>
-                      {index === 0 && imagePreviews.length === 0 && (
-                        <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded">หลัก</span>
-                      )}
-                    </div>
-                  ))}
-                  {imagePreviews.map((preview, index) => (
-                    <div key={`new-${index}`} className="relative group">
-                      <img
-                        src={preview}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg border-2 border-blue-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeNewImage(index)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                      >
-                        ✕
-                      </button>
-                      <span className="absolute top-1 left-1 bg-green-600 text-white text-xs px-1.5 py-0.5 rounded">ใหม่</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {canAddMoreImages && (
-                <div>
-                  <input
-                    type="file"
-                    id="images-upload"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="images-upload"
-                    className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg cursor-pointer transition font-medium text-sm"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    {totalImages === 0 ? "เลือกรูปภาพ" : "เพิ่มรูปภาพ"}
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">
-                    รองรับไฟล์ JPG, PNG (แต่ละไฟล์ไม่เกิน 5MB) • อัปโหลดได้อีก {5 - totalImages} รูป
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ชื่อที่พัก <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="เช่น หอพักดอกไม้"
-              />
-            </div>
-
-            {/* Category */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ประเภท <span className="text-red-500">*</span>
-              </label>
-              <select
-                required
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          {/* Modal Content */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+            className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100">
+              <h2 className="text-xl font-semibold text-slate-800 tracking-tight">
+                {editAccommodation ? "แก้ไขที่พัก" : "เพิ่มที่พักใหม่"}
+              </h2>
+              <button
+                onClick={() => {
+                  resetForm();
+                  onClose();
+                }}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               >
-                <option value="หอพัก">หอพัก</option>
-                <option value="โรงแรม">โรงแรม</option>
-                <option value="โฮมสเตย์">โฮมสเตย์</option>
-                <option value="อพาร์ทเมนท์">อพาร์ทเมนท์</option>
-                <option value="คอนโด">คอนโด</option>
-                <option value="บ้านเช่า">บ้านเช่า</option>
-              </select>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                รายละเอียด
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="อธิบายเกี่ยวกับที่พัก..."
-              />
+            {/* Scrollable Form Body */}
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+              <form id="accommodation-form" onSubmit={handleSubmit} className="space-y-8">
+                
+                {/* Error Banner */}
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm border border-red-100 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {error}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Section: รูปภาพ */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-slate-700">
+                    รูปภาพที่พัก <span className="text-slate-400 font-normal">(สูงสุด 5 รูป)</span>
+                  </label>
+                  
+                  {(existingImages.length > 0 || imagePreviews.length > 0) && (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+                      {existingImages.map((image, index) => (
+                        <div key={`existing-${index}`} className="relative group aspect-square">
+                          <img src={image} alt={`Existing ${index + 1}`} className="w-full h-full object-cover rounded-xl border border-slate-200" />
+                          <button type="button" onClick={() => removeExistingImage(index)} className="absolute -top-2 -right-2 bg-white text-red-500 shadow-md rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      {imagePreviews.map((preview, index) => (
+                        <div key={`new-${index}`} className="relative group aspect-square">
+                          <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-xl border-2 border-blue-500" />
+                          <button type="button" onClick={() => removeNewImage(index)} className="absolute -top-2 -right-2 bg-white text-red-500 shadow-md rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {canAddMoreImages && (
+                    <div
+                      onDragOver={onDragOver}
+                      onDragLeave={onDragLeave}
+                      onDrop={onDrop}
+                      className={`relative flex justify-center w-full px-6 py-8 transition-all border-2 border-dashed rounded-2xl ${
+                        isDragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      <input type="file" id="images-upload" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
+                      <label htmlFor="images-upload" className="flex flex-col items-center justify-center cursor-pointer space-y-2">
+                        <div className="p-3 bg-white shadow-sm rounded-full border border-slate-100">
+                          <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <p className="text-sm font-medium text-slate-600">คลิกเพื่อเลือกไฟล์ <span className="font-normal text-slate-500">หรือลากไฟล์มาวางที่นี่</span></p>
+                        <p className="text-xs text-slate-400">รองรับ JPG, PNG (ไม่เกิน 5MB) • อัปโหลดได้อีก {5 - totalImages} รูป</p>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* Section: ข้อมูลทั่วไป */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-1 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">ชื่อที่พัก <span className="text-red-400">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="ระบุชื่อที่พัก"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">ประเภท <span className="text-red-400">*</span></label>
+                    <select
+                      required
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
+                    >
+                      <option value="หอพัก">หอพัก</option>
+                      <option value="โรงแรม">โรงแรม</option>
+                      <option value="โฮมสเตย์">โฮมสเตย์</option>
+                      <option value="อพาร์ทเมนท์">อพาร์ทเมนท์</option>
+                      <option value="คอนโด">คอนโด</option>
+                      <option value="บ้านเช่า">บ้านเช่า</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">รายละเอียด</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400 resize-none"
+                      placeholder="จุดเด่น สิ่งอำนวยความสะดวก ฯลฯ"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">ที่อยู่</label>
+                    <input
+                      type="text"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล..."
+                    />
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* Section: ราคา */}
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">ราคาเริ่มต้น <span className="text-slate-400 font-normal">(บาท)</span> <span className="text-red-400">*</span></label>
+                    <input
+                      type="number"
+                      required
+                      value={formData.min_price}
+                      onChange={(e) => setFormData({ ...formData, min_price: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">ราคาสูงสุด <span className="text-slate-400 font-normal">(บาท / ไม่บังคับ)</span></label>
+                    <input
+                      type="number"
+                      value={formData.max_price}
+                      onChange={(e) => setFormData({ ...formData, max_price: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* Section: การติดต่อ */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">เบอร์โทรติดต่อ</label>
+                    <input
+                      type="tel"
+                      value={formData.contact_phone}
+                      onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="08X-XXX-XXXX"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">LINE ID</label>
+                    <input
+                      type="text"
+                      value={formData.contact_line}
+                      onChange={(e) => setFormData({ ...formData, contact_line: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="@lineid"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Facebook</label>
+                    <input
+                      type="text"
+                      value={formData.contact_facebook}
+                      onChange={(e) => setFormData({ ...formData, contact_facebook: e.target.value })}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      placeholder="ชื่อเพจ หรือ ลิงก์"
+                    />
+                  </div>
+                </div>
+              </form>
             </div>
 
-            {/* Address */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                ที่อยู่
-              </label>
-              <input
-                type="text"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="เช่น ถนนเพชรเกษม..."
-              />
-            </div>
-
-            {/* ✅ Price Range (New Design: 2 Inputs) */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ราคาเริ่มต้น (บาท) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={formData.min_price}
-                  onChange={(e) => setFormData({ ...formData, min_price: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="เช่น 3000"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ราคาสูงสุด (บาท) <span className="text-xs text-gray-500">(ไม่บังคับ)</span>
-                </label>
-                <input
-                  type="number"
-                  value={formData.max_price}
-                  onChange={(e) => setFormData({ ...formData, max_price: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="เช่น 5000"
-                />
-              </div>
-            </div>
-
-            {/* Contact Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  เบอร์โทร
-                </label>
-                <input
-                  type="tel"
-                  value={formData.contact_phone}
-                  onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0812345678"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  LINE ID
-                </label>
-                <input
-                  type="text"
-                  value={formData.contact_line}
-                  onChange={(e) => setFormData({ ...formData, contact_line: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="@lineid"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Facebook
-                </label>
-                <input
-                  type="text"
-                  value={formData.contact_facebook}
-                  onChange={(e) => setFormData({ ...formData, contact_facebook: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="facebook.com/..."
-                />
-              </div>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex gap-3 pt-4">
+            {/* Footer / Actions */}
+            <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 rounded-b-2xl">
               <button
                 type="button"
                 onClick={() => {
@@ -469,25 +507,32 @@ export function AddAccommodationModal({
                   onClose();
                 }}
                 disabled={submitting || uploading}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+                className="px-6 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 ยกเลิก
               </button>
               <button
+                form="accommodation-form"
                 type="submit"
                 disabled={submitting || uploading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
+                {(submitting || uploading) && (
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                )}
                 {uploading
-                  ? `กำลังอัปโหลด... (${imageFiles.length} รูป)`
+                  ? `กำลังอัปโหลด... (${imageFiles.length})`
                   : submitting
                   ? editAccommodation ? "กำลังอัปเดต..." : "กำลังบันทึก..."
-                  : editAccommodation ? "อัปเดต" : "บันทึก"}
+                  : editAccommodation ? "อัปเดตข้อมูล" : "บันทึกข้อมูล"}
               </button>
             </div>
-          </form>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
