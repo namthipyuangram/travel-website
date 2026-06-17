@@ -319,9 +319,6 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<StatsResponse["data"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
-  // We embed real destination data for resolving review targets on client side.
-  // In production replace with a join in the API.
   const [destinations, setDestinations] = useState<Destination[]>([]);
 
   const today = new Date().toLocaleDateString("th-TH", {
@@ -333,7 +330,6 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
 
     Promise.all([
       fetch("/api/admin/stats").then((r) => r.json()),
