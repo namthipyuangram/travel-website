@@ -1,3 +1,5 @@
+//src/page.tsx
+
 import Navbar from "../component/User/Navbar";
 import HeroSection from "../component/HeroSection";
 import FeaturedDestinations from "../component/FeaturedDestinations";

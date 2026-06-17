@@ -1,3 +1,5 @@
+//src/dashboard
+
 import Navbar from "../../component/User/Navbar";
 import HeroSection from "../../component/HeroSection";
 import CategorySection from "../../component/User/CategorySection";

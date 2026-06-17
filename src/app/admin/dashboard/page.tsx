@@ -1,3 +1,5 @@
+//src/admin/dashboard
+
 "use client";
 
 import { useEffect, useState } from "react";
