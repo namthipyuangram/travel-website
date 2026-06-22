@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
@@ -15,326 +15,417 @@ import {
   ChevronLeft,
   LogOut,
   Loader2,
+  UserCog2,
+  Search,
+  Menu,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 
-const menuItems = [
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type NavItem = {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+};
+
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+
+// ─── Navigation Data ──────────────────────────────────────────────────────────
+
+const NAVIGATION_GROUPS: NavGroup[] = [
   {
-    name: "แดชบอร์ด",
-    href: "/admin/dashboard",
-    icon: LayoutDashboard,
+    label: "ภาพรวม",
+    items: [
+      { name: "แดชบอร์ด", href: "/admin/dashboard", icon: LayoutDashboard },
+    ],
   },
   {
-    name: "สถานที่ท่องเที่ยว",
-    href: "/admin/destinations",
-    icon: MapPin,
+    label: "จัดการเนื้อหา",
+    items: [
+      { name: "สถานที่ท่องเที่ยว", href: "/admin/destinations", icon: MapPin },
+      { name: "ของกิน", href: "/admin/food", icon: UtensilsCrossed },
+      { name: "ที่พัก", href: "/admin/accomodations", icon: BedDouble },
+      { name: "รีวิว", href: "/admin/reviews", icon: MessageSquareText },
+    ],
   },
   {
-    name: "ของกิน",
-    href: "/admin/food",
-    icon: UtensilsCrossed,
-  },
-  {
-    name: "ที่พัก",
-    href: "/admin/accomodations",
-    icon: BedDouble,
-  },
-  {
-    name: "รีวิว",
-    href: "/admin/reviews",
-    icon: MessageSquareText,
+    label: "ระบบ",
+    items: [
+      { name: "จัดการผู้ใช้", href: "/admin/users", icon: UserCog2 },
+      { name: "ติดต่อเรา", href: "/contact", icon: Mail },
+    ],
   },
 ];
 
-const secondaryItems = [
-  {
-    name: "ติดต่อเรา",
-    href: "/contact",
-    icon: Mail,
-  },
-];
+// ─── Tooltip (collapsed state only) ──────────────────────────────────────────
 
-export const Sidebar = () => {
+function Tooltip({ label }: { label: string }) {
+  return (
+    <span
+      role="tooltip"
+      className="
+        pointer-events-none absolute left-[calc(100%+12px)] top-1/2
+        -translate-y-1/2 z-[100] whitespace-nowrap rounded-lg
+        bg-[#1E3A8A] border border-[#1E3A8A]
+        px-3 py-1.5 text-[12px] font-medium text-white
+        shadow-[0_8px_24px_rgba(0,0,0,0.12)]
+        opacity-0 invisible -translate-x-2
+        group-hover:opacity-100 group-hover:visible group-hover:translate-x-0
+        transition-all duration-200
+      "
+    >
+      {label}
+      <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1E3A8A]" />
+    </span>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // ─── UI State ──────────────────────────────────────────────────────────────
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // ─── Auth State ────────────────────────────────────────────────────────────
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      ),
+    [],
   );
 
   useEffect(() => {
-    const fetchSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      setLoading(false);
-    };
-
-    fetchSession();
-
+    let mounted = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
+    });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      if (mounted) setUser(session?.user ?? null);
     });
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
-    return () => subscription.unsubscribe();
-  }, [supabase.auth]);
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
-  // ─── Handlers ──────────────────────────────────────────────────────────────
   const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
     await supabase.auth.signOut();
     router.push("/sign-in");
     router.refresh();
   };
 
   const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
+    pathname === href || pathname.startsWith(`${href}/`);
 
-  // ─── Render Helper ─────────────────────────────────────────────────────────
-  const renderItem = (item: { name: string; href: string; icon: any }) => {
-    const active = isActive(item.href);
-    const Icon = item.icon;
-
-    return (
-      <Link
-        key={item.href}
-        href={item.href}
-        onClick={() => setMobileOpen(false)}
-        className={`group relative flex h-11 items-center rounded-xl px-3 transition-all duration-200
-        ${
-          active
-            ? "bg-white/[0.06] text-white shadow-sm"
-            : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
-        }`}
-      >
-        {active && (
-          <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-emerald-400" />
-        )}
-
-        <Icon
-          className={`h-5 w-5 shrink-0 transition-colors ${
-            active ? "text-emerald-400" : ""
-          }`}
-        />
-
-        {!collapsed && (
-          <span className="ml-3 truncate text-[15px] font-medium">
-            {item.name}
-          </span>
-        )}
-
-        {collapsed && (
-          <div
-            className="
-            pointer-events-none
-            absolute left-full ml-3
-            whitespace-nowrap
-            rounded-lg
-            border border-white/10
-            bg-[#111827]
-            px-3 py-2
-            text-xs text-white
-            opacity-0
-            shadow-xl
-            transition-all
-            group-hover:opacity-100
-            z-50
-          "
-          >
-            {item.name}
-          </div>
-        )}
-      </Link>
-    );
-  };
-
-  // สร้างชื่อผู้ใช้จำลองจาก Email (เช่น admin@example.com -> admin)
-  const displayName = user?.email?.split("@")[0] || "ผู้ดูแลระบบ";
+  const displayName = user?.email?.split("@")[0] ?? "ผู้ดูแลระบบ";
+  const avatarInitial = (user?.email?.charAt(0) ?? "A").toUpperCase();
 
   return (
     <>
-      {/* ── MOBILE HEADER ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-white/5 bg-[#0B1220] px-4 py-3 lg:hidden">
+      {/* ── Mobile Header ───────────────────────────────────────────── */}
+      <header className="flex items-center justify-between border-b border-[#DBEAFE] bg-white px-4 py-3 lg:hidden">
         <button
           onClick={() => setMobileOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white"
+          aria-label="เปิดเมนู"
+          className="
+            flex h-9 w-9 items-center justify-center rounded-lg
+            border border-[#DBEAFE] text-[#64748B]
+            transition-colors hover:border-[#EC4899]/30 hover:bg-[#EC4899]/10 hover:text-[#EC4899]
+          "
         >
-          ☰
+          <Menu className="h-4 w-4" />
         </button>
 
-        <div className="flex items-center gap-3">
-          <Image
-            src="/images/logo-travel.png"
-            alt="เที่ยวตามงบโคราช"
-            width={48}
-            height={48}
-            className="rounded-xl shadow-sm"
-            priority
-          />
-
-          <div className="flex flex-col leading-tight">
-            <span className="font-semibold text-white">เที่ยวโคราช</span>
-            <span className="text-xs text-white/60">Admin</span>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EC4899]/10 ring-1 ring-[#EC4899]/30">
+            <Image
+              src="/images/logo-travel.png"
+              alt="Logo"
+              width={20}
+              height={20}
+              className="rounded"
+              priority
+            />
           </div>
+          <span className="text-sm font-bold tracking-tight text-[#1E3A8A]">
+            เที่ยวโคราช
+          </span>
         </div>
 
-        {/* Custom Mobile User Avatar & Logout */}
-        {loading ? (
-          <div className="flex h-9 w-9 items-center justify-center">
-            <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
-          </div>
-        ) : (
-          <button
-            onClick={handleSignOut}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.05] text-emerald-400 hover:bg-red-500/10 hover:text-red-400 border border-white/10 transition-colors"
-            title="ออกจากระบบ"
-          >
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          aria-label="ออกจากระบบ"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-transparent text-[#64748B] transition-colors hover:border-red-500/25 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+        >
+          {signingOut ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
             <LogOut className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+          )}
+        </button>
+      </header>
 
-      {/* ── BACKDROP ──────────────────────────────────────────────────────── */}
-      <div
-        onClick={() => setMobileOpen(false)}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-all lg:hidden
-        ${mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
-      />
+      {/* ── Mobile Backdrop ─────────────────────────────────────────── */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+          className="fixed inset-0 z-40 bg-[#1E3A8A]/20 backdrop-blur-sm lg:hidden"
+        />
+      )}
 
-      {/* ── SIDEBAR ───────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ─────────────────────────────────────────────────── */}
       <aside
-        className={`
-        fixed left-0 top-0 z-50
-        flex h-screen flex-col
-        border-r border-white/[0.06]
-        bg-[#0B1220]
-        transition-all duration-300
-        lg:sticky lg:translate-x-0
-        ${collapsed ? "w-20" : "w-72"}
-        ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
-      `}
+        className={[
+          "fixed left-0 top-0 z-50 flex h-screen flex-col relative",
+          "border-r border-[#DBEAFE] bg-white",
+          "transition-[width,transform] duration-300 ease-in-out",
+          "lg:sticky lg:translate-x-0",
+          collapsed ? "w-[72px]" : "w-60", // แก้ไข w-17 เป็น w-[72px] เพื่อป้องกันบัค
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
       >
-        {/* HEADER */}
-        <div className="relative flex h-20 items-center border-b border-white/[0.06] px-5">
-          {!collapsed ? (
-            <div>
-              <h1 className="text-lg font-semibold text-white">เที่ยวโคราช</h1>
-              <p className="mt-1 text-xs text-slate-500">
-                Travel Management Platform
+        {/* Collapse button — desktop (ย้ายออกมานอก Header กันโดนตัด) */}
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "ขยาย Sidebar" : "ย่อ Sidebar"}
+          className="
+            absolute -right-3.5 top-[17px] z-50 hidden h-7 w-7 items-center justify-center
+            rounded-full border border-[#DBEAFE] bg-white
+            text-[#3B82F6] shadow-sm
+            transition-all hover:border-[#EC4899]/40 hover:text-[#EC4899] hover:scale-110
+            lg:flex
+          "
+        >
+          <ChevronLeft
+            className={`h-3.5 w-3.5 transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {/* ── Logo / Header ──────────────────────────────────────── */}
+        <div className="flex h-[62px] shrink-0 items-center border-b border-[#DBEAFE] px-[14px]">
+          <Link
+            href="/dashboard"
+            className="group flex items-center gap-3 px-2 w-full min-w-0"
+          >
+            {/* Logo */}
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl">
+              <Image
+                src="/images/logo-travel.png"
+                alt="เที่ยวตามงบโคราช"
+                fill
+                priority
+                className="object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            </div>
+
+            {/* Wordmark (เฟดหายสมูทๆ) */}
+            <div
+              className={`flex-1 overflow-hidden transition-all duration-300 ${
+                collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+              }`}
+            >
+              <p className="truncate text-sm font-bold tracking-tight text-slate-900">
+                เที่ยวตามงบ<span className="text-[#3B82F6]">โคราช</span>
+              </p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                หน้าจัดการระบบของเว็บไซต์
               </p>
             </div>
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 font-bold text-slate-900 mx-auto">
-              ท
-            </div>
-          )}
+          </Link>
 
+          {/* Mobile close */}
           <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="absolute -right-3 hidden h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-[#111827] lg:flex hover:bg-white/[0.05] transition-colors z-50"
+            onClick={() => setMobileOpen(false)}
+            aria-label="ปิดเมนู"
+            className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[#64748B] hover:text-[#EC4899] lg:hidden"
           >
-            <ChevronLeft
-              className={`h-4 w-4 text-slate-300 transition-transform duration-300 ${
-                collapsed ? "rotate-180" : ""
-              }`}
-            />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* NAVIGATION */}
-        <nav className="flex-1 overflow-y-auto px-3 py-5">
-          {!collapsed && (
-            <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-              ระบบจัดการ
-            </p>
-          )}
+        {/* ── Navigation (ซ่อน Scrollbar ถาวร) ────────────────────── */}
+        <nav
+          className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          aria-label="Navigation"
+        >
+          <div className="space-y-[18px]">
+            {NAVIGATION_GROUPS.map((group) => (
+              <div key={group.label}>
+                {/* Group header */}
+                {!collapsed ? (
+                  <p className="mb-[5px] px-2 text-[9.5px] font-bold uppercase tracking-[0.1em] text-[#3B82F6]">
+                    {group.label}
+                  </p>
+                ) : (
+                  <div className="mx-auto mb-[6px] h-px w-5 rounded-full bg-[#DBEAFE]" />
+                )}
 
-          <div className="space-y-1">
-            {menuItems.map((item) => renderItem(item))}
-          </div>
+                <ul className="space-y-[1px]" role="list">
+                  {group.items.map((item) => {
+                    const active = isActive(item.href);
+                    const Icon = item.icon;
 
-          {!collapsed && (
-            <p className="mb-3 mt-8 px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-              เว็บไซต์
-            </p>
-          )}
+                    return (
+                      <li key={item.href} role="listitem">
+                        <Link
+                          href={item.href}
+                          aria-current={active ? "page" : undefined}
+                          className={[
+                            "group relative flex h-9 items-center rounded-lg min-w-0",
+                            "outline-none transition-all duration-150",
+                            "focus-visible:ring-2 focus-visible:ring-[#EC4899]/40",
+                            collapsed ? "justify-center px-0" : "px-[9px]",
+                            active
+                              ? "bg-[#EC4899]/10 text-[#EC4899]"
+                              : "text-[#64748B] hover:bg-[#EFF6FF] hover:text-[#1E3A8A]",
+                          ].join(" ")}
+                        >
+                          {/* Active indicator */}
+                          {active && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute left-0 top-1/2 h-[18px] w-[3px] -translate-y-1/2 rounded-r-[3px]"
+                              style={{
+                                background: "linear-gradient(180deg, #EC4899, #F472B6)",
+                              }}
+                            />
+                          )}
 
-          <div className="space-y-1">
-            {secondaryItems.map((item) => renderItem(item))}
+                          <Icon
+                            aria-hidden="true"
+                            className={`h-[15px] w-[15px] shrink-0 transition-colors ${
+                              active
+                                ? "text-[#EC4899]"
+                                : "text-[#94A3B8] group-hover:text-[#3B82F6]"
+                            }`}
+                          />
+
+                          {/* Text (เฟดหายเนียนๆ ป้องกัน Scrollbar ดันจอ) */}
+                          <div
+                            className={`flex items-center overflow-hidden transition-all duration-300 ${
+                              collapsed ? "w-0 opacity-0" : "flex-1 w-auto opacity-100 ml-[9px]"
+                            }`}
+                          >
+                            <span className="truncate text-[13px] font-medium block w-full">
+                              {item.name}
+                            </span>
+                          </div>
+
+                          {collapsed && <Tooltip label={item.name} />}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
         </nav>
 
-        {/* USER CARD (แทนที่ UserButton ของ Clerk) */}
-        <div className="border-t border-white/[0.06] p-4">
-          <div
-            className={`
-            flex items-center
-            rounded-2xl
-            border border-white/[0.05]
-            bg-white/[0.03]
-            p-3
-            ${collapsed ? "justify-center" : "justify-between"}
-          `}
-          >
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-emerald-400 mx-auto" />
-            ) : (
-              <>
-                <div className="flex items-center min-w-0">
-                  {/* Custom Avatar */}
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 font-bold uppercase text-sm border border-emerald-500/20">
-                    {user?.email?.charAt(0) || "U"}
-                  </div>
+        {/* ── User Panel ─────────────────────────────────────────── */}
+        <div className="shrink-0 border-t border-[#DBEAFE] p-3">
+          {loading ? (
+            <div className="flex h-12 items-center justify-center">
+              <Loader2 className="h-4 w-4 animate-spin text-[#3B82F6]" />
+            </div>
+          ) : (
+            <div
+              className={[
+                "relative flex items-center rounded-[11px] min-w-0",
+                "border border-[#DBEAFE] bg-[#EFF6FF]",
+                "transition-[border-color] hover:border-[#3B82F6]/40",
+                collapsed ? "justify-center p-2" : "p-2",
+              ].join(" ")}
+            >
+              {/* Avatar */}
+              <div className="relative shrink-0">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-bold text-[#EC4899]"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(236,72,153,0.15), rgba(244,114,182,0.15))",
+                    boxShadow: "inset 0 0 0 1px rgba(236,72,153,0.25)",
+                  }}
+                >
+                  {avatarInitial}
+                </div>
+                <span
+                  aria-label="Online"
+                  className="absolute -bottom-0.5 -right-0.5 h-[9px] w-[9px] rounded-full border-2 border-white bg-emerald-400"
+                />
+              </div>
 
-                  {!collapsed && (
-                    <div className="ml-3 min-w-0 pr-2">
-                      <p className="truncate text-sm font-medium text-white capitalize">
-                        {displayName}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        Administrator
-                      </p>
-                    </div>
-                  )}
+              {/* Info (ซ่อนเนียนๆ) */}
+              <div
+                className={`flex items-center overflow-hidden transition-all duration-300 ${
+                  collapsed ? "w-0 opacity-0" : "flex-1 w-auto opacity-100 ml-2"
+                }`}
+              >
+                <div className="min-w-0 flex-1 overflow-hidden pr-1">
+                  <p className="truncate text-[13px] font-semibold capitalize leading-none text-[#1E3A8A]">
+                    {displayName}
+                  </p>
+                  <p className="mt-[3px] truncate text-[10px] uppercase leading-none tracking-[0.04em] text-[#3B82F6]">
+                    Administrator
+                  </p>
                 </div>
 
-                {/* Logout Button (ซ่อนเมื่อพับเมนู) */}
-                {!collapsed && (
-                  <button
-                    onClick={handleSignOut}
-                    title="ออกจากระบบ"
-                    className="flex shrink-0 h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/[0.05] hover:text-red-400 transition-colors"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </button>
-                )}
+                <button
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  aria-label="ออกจากระบบ"
+                  title="ออกจากระบบ"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[#64748B] transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                >
+                  {signingOut ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <LogOut className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
 
-                {/* กรณีพับเมนูอยู่ ให้คลิกที่ Avatar เพื่อ Logout ได้ */}
-                {collapsed && (
-                  <button
-                    onClick={handleSignOut}
-                    className="absolute inset-0 z-10 rounded-2xl flex items-center justify-center opacity-0 hover:opacity-100 bg-[#0B1220]/90 text-red-400 transition-opacity"
-                    title="ออกจากระบบ"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+              {/* Collapsed overlay */}
+              {collapsed && (
+                <button
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  aria-label="ออกจากระบบ"
+                  className="group absolute inset-0 z-10 h-full w-full cursor-pointer rounded-[11px]"
+                >
+                  <Tooltip label="ออกจากระบบ" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </aside>
     </>
   );
-};
+}

@@ -10,10 +10,12 @@ import {
   MessageSquare,
   Star,
   Trash2,
-  Filter,
   MapPin,
   X,
   Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmDialog from "../../../component/ConfirmDialog";
@@ -48,6 +50,8 @@ interface GroupedLocation {
   average_rating: number;
 }
 
+type CategoryType = "ทั้งหมด" | "ที่พัก" | "ร้านอาหาร" | "สถานที่ท่องเที่ยว";
+
 export default function AdminReviewsPage() {
   const router = useRouter();
 
@@ -66,7 +70,6 @@ export default function AdminReviewsPage() {
 
   // ─── Filters & Pagination ──────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
-  type CategoryType = "ทั้งหมด" | "ที่พัก" | "ร้านอาหาร" | "สถานที่ท่องเที่ยว";
   const [activeType, setActiveType] = useState<CategoryType>("ทั้งหมด");
   const [page, setPage] = useState(1);
   const itemsPerPage = 8;
@@ -76,36 +79,47 @@ export default function AdminReviewsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ================= 1. ตรวจสอบสถานะ Auth =================
   useEffect(() => {
-    const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      setAuthLoaded(true);
-    };
-    fetchSession();
-  }, [supabase.auth]);
+    let active = true;
 
-  // ================= 2. ดักจับสิทธิ์ Admin =================
-  useEffect(() => {
-    if (authLoaded) {
-      const role = user?.app_metadata?.role as string | undefined;
-      if (role !== "admin") {
-        router.push("/dashboard");
+    const initialize = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+        
+        if (!active) return;
+        setUser(currentUser);
+
+        if (!currentUser) {
+          router.push("/dashboard");
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", currentUser.id)
+          .single();
+
+        if (profile?.role !== "admin") {
+          router.push("/dashboard");
+        } else {
+          fetchAndGroupReviews();
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        toast.error("เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์");
+      } finally {
+        if (active) setAuthLoaded(true);
       }
-    }
-  }, [authLoaded, user, router]);
+    };
 
-  // ================= 3. ดึงข้อมูล =================
-  useEffect(() => {
-    if (authLoaded && user?.app_metadata?.role === "admin") {
-      fetchAndGroupReviews();
-    }
-  }, [authLoaded, user]);
+    initialize();
 
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, activeType]);
+    return () => {
+      active = false;
+    };
+  }, [supabase, router]);
 
   const getFirstImage = (item: any): string | null => {
     try {
@@ -127,7 +141,6 @@ export default function AdminReviewsPage() {
     try {
       setLoading(true);
 
-      // ใช้ตัวแปร supabase จาก Browser Client แทน supabaseClient เพื่อให้แนบ Token ป้องกันปัญหา RLS
       const [
         { data: reviewsData },
         { data: accData },
@@ -284,12 +297,16 @@ export default function AdminReviewsPage() {
   }, [filteredLocations, page]);
 
   // --- Render Helpers ---
-  const renderStars = (rating: number, size = 14) => {
+  const renderStars = (rating: number, size = 13) => {
     return Array.from({ length: 5 }).map((_, i) => (
       <Star
         key={i}
         size={size}
-        className={`${i < Math.round(rating) ? "fill-amber-400 text-amber-400" : "fill-slate-100 text-slate-200"}`}
+        className={`${
+          i < Math.round(rating)
+            ? "fill-amber-400 text-amber-400"
+            : "fill-zinc-100 text-zinc-200"
+        } transition-colors`}
       />
     ));
   };
@@ -305,326 +322,313 @@ export default function AdminReviewsPage() {
     });
   };
 
-  if (!authLoaded || loading) {
-    return (
-      <main className="min-h-screen bg-[#F8FAFC] flex justify-center items-center">
-        <svg className="animate-spin h-10 w-10 text-indigo-600" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
-          <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75"></path>
-        </svg>
-      </main>
-    );
-  }
-
-  // ป้องกันการ Flash ของ UI ระหว่างรอ Redirect หากไม่ใช่ Admin
-  if (!user || user.app_metadata?.role !== "admin") {
-    return null;
-  }
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24">
-      <main className="max-w-7xl mx-auto pt-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-zinc-50 pb-24 font-sans text-zinc-900 selection:bg-blue-100 selection:text-blue-900">
+      <main className="max-w-6xl mx-auto pt-10 px-4 sm:px-6 lg:px-8">
+        
         {/* Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10"
-        >
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-200/60 text-indigo-600">
-              <MessageSquare size={28} strokeWidth={2} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                จัดการรีวิว (Reviews)
-              </h1>
-              <p className="text-slate-500 mt-1 text-sm font-medium">
-                รวมโพสต์สถานที่ที่มีการรีวิว จัดการง่ายเหมือนใน Social Media
-              </p>
-            </div>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+              จัดการการีวิวของแต่ละสถานที่
+            </h1>
+            <p className="text-zinc-500 mt-1 text-sm">
+              ตรวจสอบ ตรวจทาน และจัดการโพสต์ความคิดเห็นของผู้ใช้บนสถานที่ต่างๆ
+            </p>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Toolbar: Search & Filter */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="flex flex-col sm:flex-row gap-4 mb-8"
-        >
-          <div className="relative flex-1 group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
-              <Search size={18} />
-            </div>
+        {/* Unified Enterprise Command Toolbar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between p-2 bg-white border border-zinc-200 rounded-xl shadow-sm gap-2 mb-6">
+          {/* Segmented Controller (Replaced raw Select Box) */}
+          <div className="flex p-1 space-x-1 bg-zinc-50 rounded-lg overflow-x-auto scrollbar-none shrink-0">
+            {(["ทั้งหมด", "ที่พัก", "ร้านอาหาร", "สถานที่ท่องเที่ยว"] as CategoryType[]).map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  setActiveType(type);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
+                  activeType === type
+                    ? "bg-white text-zinc-900 shadow-sm border border-zinc-200/50"
+                    : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                {type === "ทั้งหมด" ? "ทุกหมวดหมู่" : type}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Field */}
+          <div className="relative w-full md:w-64 px-1 md:px-0">
+            <Search className="absolute left-3 md:left-2 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
             <input
               type="text"
-              placeholder="ค้นหาชื่อสถานที่ที่มีรีวิว..."
+              placeholder="ค้นหาชื่อสถานที่..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 text-slate-900 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none shadow-sm"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              className="w-full bg-transparent border border-zinc-200 text-zinc-900 rounded-md pl-8 pr-8 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder:text-zinc-400"
             />
-          </div>
-
-          <div className="relative flex-shrink-0 w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Filter size={16} />
-            </div>
-            <select
-              value={activeType}
-              onChange={(e) => setActiveType(e.target.value as CategoryType)}
-              className="w-full pl-9 pr-8 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none appearance-none shadow-sm cursor-pointer font-medium"
-            >
-              <option value="ทั้งหมด">ทุกหมวดหมู่สถานที่</option>
-              <option value="ที่พัก">ที่พัก</option>
-              <option value="ร้านอาหาร">ร้านอาหาร</option>
-              <option value="สถานที่ท่องเที่ยว">สถานที่ท่องเที่ยว</option>
-            </select>
-          </div>
-        </motion.div>
-
-        {/* 📱 IG Style Feed Cards */}
-        <motion.div layout className="min-h-100">
-          <AnimatePresence mode="popLayout">
-            {filteredLocations.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center min-h-80"
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 md:right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
               >
-                <div className="bg-slate-50 p-4 rounded-full mb-4 text-slate-400">
-                  <MessageSquare size={32} />
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Main Content Arena */}
+        <div className="min-h-[400px]">
+          <AnimatePresence mode="popLayout">
+            {(!authLoaded || loading) ? (
+              /* Premium Shimmer Skeleton Grid View */
+              <div key="loading-skeleton" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm animate-pulse">
+                    <div className="aspect-square bg-zinc-100" />
+                    <div className="p-4 space-y-2">
+                      <div className="h-4 bg-zinc-100 rounded w-3/4" />
+                      <div className="h-3 bg-zinc-50 rounded w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredLocations.length === 0 ? (
+              /* Minimalistic Empty State */
+              <motion.div
+                key="empty-state"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="bg-white border border-zinc-200 rounded-xl p-16 text-center flex flex-col items-center justify-center border-dashed"
+              >
+                <div className="w-10 h-10 bg-zinc-50 border border-zinc-200 rounded-lg flex items-center justify-center mb-4 text-zinc-400">
+                  <Inbox size={18} />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-1">
-                  ยังไม่มีสถานที่ถูกรีวิว
-                </h3>
-                <p className="text-slate-500 text-sm max-w-sm">
-                  สถานที่ที่มีคนเข้ามาเขียนรีวิวจะแสดงขึ้นที่นี่ในรูปแบบการ์ดโพสต์
+                <h3 className="text-sm font-semibold text-zinc-900">ไม่พบข้อมูลสถานที่</h3>
+                <p className="text-zinc-500 text-sm mt-1 max-w-xs mx-auto">
+                  {searchQuery ? `ไม่พบรีวิวที่ตรงกับคำค้นหา "${searchQuery}"` : "ยังไม่มีข้อมูลการรีวิวในระบบสำหรับหมวดหมู่นี้"}
                 </p>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    ล้างการค้นหา
+                  </button>
+                )}
               </motion.div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {displayedLocations.map((loc, index) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2, delay: index * 0.05 }}
+              /* Content Card Grid */
+              <motion.div
+                key="grid-data"
+                layout
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+              >
+                {displayedLocations.map((loc) => (
+                  <div
                     key={loc.target_id}
                     onClick={() => setSelectedLocation(loc)}
-                    className="group flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
+                    className="group bg-white rounded-xl border border-zinc-200 shadow-sm hover:border-zinc-300 transition-all cursor-pointer overflow-hidden flex flex-col justify-between"
                   >
-                    <div className="relative aspect-square bg-slate-100 overflow-hidden">
-                      {loc.target_image ? (
-                        <img
-                          src={loc.target_image}
-                          alt={loc.target_name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex bg-slate-200 items-center justify-center text-slate-400">
-                          <ImageIcon size={48} strokeWidth={1} />
-                        </div>
-                      )}
-
-                      <div className="absolute top-3 left-3">
-                        <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-md tracking-wider">
-                          {loc.target_type}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-white flex flex-col gap-1.5">
-                      <div className="flex justify-between items-start gap-2">
-                        <h3 className="font-bold text-slate-900 truncate text-base leading-tight">
-                          {loc.target_name}
-                        </h3>
-                        <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
-                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mb-px" />
-                          <span className="font-semibold text-xs text-slate-700">
-                            {loc.average_rating}
+                    <div>
+                      <div className="relative aspect-square bg-zinc-50 overflow-hidden border-b border-zinc-100">
+                        {loc.target_image ? (
+                          <img
+                            src={loc.target_image}
+                            alt={loc.target_name}
+                            className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500 ease-out"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex bg-zinc-50 items-center justify-center text-zinc-300">
+                            <ImageIcon size={32} strokeWidth={1.5} />
+                          </div>
+                        )}
+                        <div className="absolute top-2.5 left-2.5">
+                          <span className="bg-blue-500/90 backdrop-blur-sm text-white text-[10px] font-medium px-2 py-0.5 rounded-md tracking-wide">
+                            {loc.target_type}
                           </span>
                         </div>
                       </div>
-                      <p className="text-sm font-medium text-indigo-600">
-                        ดูทั้งหมด {loc.reviews.length} รีวิว
-                      </p>
+
+                      <div className="p-4 flex flex-col gap-1">
+                        <h3 className="font-medium text-zinc-900 truncate text-sm">
+                          {loc.target_name}
+                        </h3>
+                        {loc.target_location && (
+                          <p className="text-xs text-zinc-400 flex items-center gap-1 truncate">
+                            <MapPin size={10} /> {loc.target_location}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </motion.div>
+
+                    <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-zinc-50 mt-auto bg-zinc-50/20">
+                      <span className="text-xs font-medium text-blue-600 group-hover:text-blue-700 transition-colors">
+                        {loc.reviews.length} รีวิว
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                        <span className="font-semibold text-xs text-zinc-700">
+                          {loc.average_rating}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </div>
+              </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center justify-between mt-10 px-2 sm:px-0"
-          >
-            <p className="hidden sm:block text-sm text-slate-500">
-              หน้า <span className="font-semibold text-slate-900">{page}</span>{" "}
-              จากทั้งหมด{" "}
-              <span className="font-semibold text-slate-900">{totalPages}</span>
+        {/* Pagination Console */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-8 px-2 py-3 border-t border-zinc-200 bg-transparent">
+            <p className="text-xs text-zinc-500">
+              หน้า <span className="font-medium text-zinc-900">{page}</span> จาก <span className="font-medium text-zinc-900">{totalPages}</span>
             </p>
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center gap-1">
               <button
                 disabled={page === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"
+                className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50 disabled:opacity-30 disabled:pointer-events-none transition-colors border border-zinc-200 bg-white shadow-sm"
               >
-                ก่อนหน้า
+                <ChevronLeft size={14} />
               </button>
               <button
                 disabled={page === totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"
+                className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50 disabled:opacity-30 disabled:pointer-events-none transition-colors border border-zinc-200 bg-white shadow-sm"
               >
-                ถัดไป
+                <ChevronRight size={14} />
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* 📱 The Instagram "Post View" Modal 📱 */}
+        {/* ─── Premium Focused Workspace Review Sheet Overlay ─── */}
         <AnimatePresence>
           {selectedLocation && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-6">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setSelectedLocation(null)}
-                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                className="absolute inset-0 bg-zinc-950/20 backdrop-blur-sm"
               />
 
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-                className="relative w-full h-full md:h-auto md:max-h-[85vh] max-w-5xl bg-white md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden"
+                exit={{ opacity: 0, scale: 0.98, y: 10 }}
+                transition={{ duration: 0.23, ease: "easeOut" }}
+                className="relative w-full h-[90vh] md:h-auto md:max-h-[80vh] max-w-4xl bg-white rounded-xl shadow-2xl flex flex-col md:flex-row overflow-hidden border border-zinc-200"
               >
+                {/* Close Button on Mobile layout */}
                 <button
                   onClick={() => setSelectedLocation(null)}
-                  className="md:hidden absolute top-4 right-4 z-50 p-2 bg-black/50 text-white rounded-full backdrop-blur-sm"
+                  className="md:hidden absolute top-3 right-3 z-50 p-1.5 bg-white/80 text-zinc-700 rounded-full border border-zinc-200 shadow-sm backdrop-blur-sm"
                 >
-                  <X size={20} strokeWidth={2.5} />
+                  <X size={16} />
                 </button>
 
-                {/* Left Side: Photo (IG Style) */}
-                <div className="w-full md:w-[55%] h-[40vh] md:h-full bg-black flex items-center justify-center relative shrink-0">
+                {/* Left Side Visual Preview Pane */}
+                <div className="w-full md:w-[45%] h-[30vh] md:h-auto bg-zinc-50 flex items-center justify-center relative border-b md:border-b-0 md:border-r border-zinc-200">
                   {selectedLocation.target_image ? (
                     <img
                       src={selectedLocation.target_image}
                       alt={selectedLocation.target_name}
-                      className="w-full h-full object-contain bg-black"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="flex flex-col items-center text-slate-600">
-                      <MapPin size={48} className="mb-2 opacity-50" />
-                      <p className="text-sm">ไม่มีรูปภาพสถานที่</p>
+                    <div className="flex flex-col items-center text-zinc-300">
+                      <ImageIcon size={40} className="mb-1" />
+                      <p className="text-xs">ไม่มีรูปภาพสถานที่</p>
                     </div>
                   )}
-                  <div className="hidden md:block absolute top-4 left-4 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                  <div className="hidden md:block absolute top-3 left-3 bg-zinc-900/90 backdrop-blur-sm text-white text-[11px] font-medium px-2 py-0.5 rounded-md">
                     {selectedLocation.target_type}
                   </div>
                 </div>
 
-                {/* Right Side: Comments (Reviews) Section */}
-                <div className="w-full md:w-[45%] h-[60vh] md:h-full flex flex-col bg-white">
-                  <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white z-10">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden shrink-0">
-                        {selectedLocation.target_image ? (
-                          <img
-                            src={selectedLocation.target_image}
-                            className="w-full h-full object-cover"
-                            alt="avatar"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <MapPin size={16} className="text-slate-400" />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <h2
-                          className="font-bold text-slate-900 leading-none truncate max-w-50"
-                          title={selectedLocation.target_name}
-                        >
-                          {selectedLocation.target_name}
-                        </h2>
-                        <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs text-slate-500">
-                            {selectedLocation.reviews.length} รีวิว
-                          </p>
-                          <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                          <div className="flex items-center gap-0.5">
-                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                            <span className="text-xs font-bold text-slate-700">
-                              {selectedLocation.average_rating}
-                            </span>
-                          </div>
+                {/* Right Side Comments Interactive Panel */}
+                <div className="w-full md:w-[55%] flex flex-col bg-white h-[calc(90vh-30vh)] md:h-[80vh]">
+                  {/* Internal Sub-Header */}
+                  <div className="p-4 border-b border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50/50">
+                    <div className="min-w-0 pr-4">
+                      <h2 className="font-medium text-zinc-900 text-sm truncate" title={selectedLocation.target_name}>
+                        {selectedLocation.target_name}
+                      </h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-xs text-zinc-400">
+                          {selectedLocation.reviews.length} รายการรีวิว
+                        </p>
+                        <span className="w-1 h-1 rounded-full bg-zinc-300" />
+                        <div className="flex items-center gap-0.5">
+                          <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                          <span className="text-xs font-semibold text-zinc-700">
+                            {selectedLocation.average_rating}
+                          </span>
                         </div>
                       </div>
                     </div>
                     <button
                       onClick={() => setSelectedLocation(null)}
-                      className="hidden md:flex p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                      className="hidden md:flex p-1 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded-md transition-colors"
                     >
-                      <X size={20} strokeWidth={2.5} />
+                      <X size={16} />
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">
-                    <div className="space-y-5">
-                      {selectedLocation.reviews.map((r) => (
-                        <div key={r.id} className="flex gap-3 group">
-                          <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs shrink-0">
-                            {r.created_by.charAt(0).toUpperCase()}
+                  {/* Reviews Stream Container */}
+                  <div className="flex-1 overflow-y-auto p-4 bg-white space-y-4">
+                    {selectedLocation.reviews.map((r) => (
+                      <div key={r.id} className="flex gap-3 items-start group">
+                        {/* Elegant Minimal Initial Circle */}
+                        <div className="w-7 h-7 rounded-md bg-zinc-100 border border-zinc-200/60 flex items-center justify-center text-zinc-700 font-medium text-xs shrink-0 select-none">
+                          {r.created_by.charAt(0).toUpperCase()}
+                        </div>
+
+                        {/* Speech Block */}
+                        <div className="flex-1 min-w-0">
+                          <div className="bg-zinc-50 border border-zinc-200/70 p-3 rounded-lg rounded-tl-none">
+                            <div className="flex justify-between items-center mb-1 gap-2">
+                              <span className="font-medium text-xs text-zinc-500 truncate" title={r.created_by}>
+                                ID: {r.created_by.slice(0, 8)}...
+                              </span>
+                              <div className="flex gap-0.5 shrink-0">
+                                {renderStars(r.rating, 10)}
+                              </div>
+                            </div>
+                            <p className="text-zinc-800 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                              {r.comment || <span className="text-zinc-400 italic text-xs">ไม่มีข้อความประเมิน</span>}
+                            </p>
                           </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="bg-slate-50 p-3.5 rounded-2xl rounded-tl-none relative border border-slate-100">
-                              <div className="flex justify-between items-center mb-1.5">
-                                <span
-                                  className="font-semibold text-sm text-slate-900 truncate"
-                                  title={r.created_by}
-                                >
-                                  User: {r.created_by.slice(0, 8)}...
-                                </span>
-                                <div className="flex gap-0.5">
-                                  {renderStars(r.rating, 10)}
-                                </div>
-                              </div>
-                              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
-                                {r.comment || (
-                                  <span className="text-slate-400 italic">
-                                    ไม่มีข้อความ
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-4 mt-1.5 pl-2">
-                              <span className="text-[11px] font-medium text-slate-400">
-                                {timeAgo(r.created_at)}
-                              </span>
-                              <button
-                                onClick={() => setDeleteConfirm(r.id)}
-                                className="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors"
-                              >
-                                ลบรีวิวนี้
-                              </button>
-                            </div>
+                          {/* Action Sub-text line */}
+                          <div className="flex items-center gap-3 mt-1.5 ml-1">
+                            <span className="text-[10px] text-zinc-400">
+                              {timeAgo(r.created_at)}
+                            </span>
+                            <button
+                              onClick={() => setDeleteConfirm(r.id)}
+                              className="text-[10px] font-medium text-zinc-400 hover:text-red-600 transition-colors flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            >
+                              <Trash2 size={10} /> ลบความคิดเห็นนี้
+                            </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </motion.div>
@@ -632,18 +636,18 @@ export default function AdminReviewsPage() {
           )}
         </AnimatePresence>
 
+        {/* Global Destructive Action Confirmation Modal */}
         <ConfirmDialog
           open={!!deleteConfirm}
           danger={true}
           loading={isDeleting}
-          title="ยืนยันการลบรีวิว"
+          title="Delete Review Log"
           message={
-            <span className="text-slate-600">
-              คุณต้องการลบรีวิวคอมเมนต์นี้หรือไม่? ข้อมูลนี้จะถูก{" "}
-              <span className="font-semibold text-red-600">ลบอย่างถาวร</span>
+            <span className="text-zinc-500 text-sm block mt-2 leading-relaxed">
+              คุณแน่ใจหรือไม่ว่าต้องการลบรายการรีวิวนี้? การดำเนินการนี้จะทำลายข้อมูลคอมเมนต์และคะแนนประเมินออกไปอย่าง <span className="font-semibold text-red-600">ถาวรจากระบบ</span> โดยไม่สามารถกู้คืนได้
             </span>
           }
-          confirmText="ลบรีวิวทิ้ง"
+          confirmText="ลบข้อมูลถาวร"
           cancelText="ยกเลิก"
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteConfirm(null)}

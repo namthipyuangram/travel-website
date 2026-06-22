@@ -30,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="th" className={prompt.variable}>
+    <html lang="th" className={prompt.variable} suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <main className="font-sans">{children}</main>
         <Toaster position="top-right" />

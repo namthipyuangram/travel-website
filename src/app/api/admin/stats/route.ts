@@ -4,9 +4,9 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { generalApiRateLimit } from "@/lib/rate-limit";
 
-// ─── Helper: ดึงข้อมูล User จาก Supabase ──────────────────────────────────────
+// ─── Helper: ดึงข้อมูล User และ Role จาก Supabase ─────────────────────────────
 
-export const getSessionUser = async () => {
+export const getSessionUserWithRole = async () => {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,14 +23,23 @@ export const getSessionUser = async () => {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return user;
+  if (!user) return { user: null, role: null };
+
+  // ดึง Role จากตาราง public.profiles (วิธีที่เราเลือกใช้)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  return { user, role: profile?.role ?? "user" };
 };
 
 // ─── GET /api/admin/stats ────────────────────────────────────────────────────
 
 export const GET = async () => {
   try {
-    const user = await getSessionUser();
+    const { user, role } = await getSessionUserWithRole();
 
     // 1. ตรวจสอบการเข้าสู่ระบบ
     if (!user) {
@@ -40,8 +49,8 @@ export const GET = async () => {
       );
     }
 
-    // 2. ป้องกันผู้ใช้ทั่วไปเข้าถึงข้อมูลสถิติของระบบ (อุดช่องโหว่)
-    const isAdmin = user.app_metadata?.role === "admin";
+    // 2. ป้องกันผู้ใช้ทั่วไปเข้าถึงข้อมูลสถิติของระบบ
+    const isAdmin = role === "admin"; // เช็คจากตัวแปร role ที่ดึงมาจาก profiles
     if (!isAdmin) {
       return NextResponse.json(
         { success: false, error: "Forbidden: Admin access required" },

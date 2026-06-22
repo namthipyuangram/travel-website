@@ -673,7 +673,7 @@ export function TripSummaryModal({
           <div className="min-w-0 flex-1">
             <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block">ยอดรวมสุทธิ</span>
             <div className="flex items-baseline gap-1.5 truncate">
-              <span className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight">
+              <span className="text-xl sm:text-2xl font-black text-emerald-900 tracking-tight">
                 ฿{totalPrice.toLocaleString()}
               </span>
               {totalBudget > 0 && isOver && (
@@ -682,12 +682,12 @@ export function TripSummaryModal({
             </div>
           </div>
 
-          <div className="shrink-0 w-[55%] sm:w-[220px]">
+          <div className="shrink-0 w-[55%] sm:w-55">
             {isLoggedIn ? (
               <button
                 onClick={onSave}
                 disabled={items.length === 0 || isLoading}
-                className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 px-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-neutral-900/15 active:scale-[0.98] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full bg-emerald-900 hover:bg-black text-white py-2.5 px-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-neutral-900/15 active:scale-[0.98] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <RefreshCcw className="w-5 h-5 animate-spin" />
@@ -701,10 +701,10 @@ export function TripSummaryModal({
             ) : (
               <button
                 onClick={onLoginRequired}
-                className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 px-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all"
+                className="w-full bg-neutral-900 hover:bg-black text-white py-2.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all"
               >
                 <LogIn className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="truncate">ล็อกอินเพื่อบันทึก</span>
+                <span className="truncate text-sm">ล็อกอินเพื่อบันทึก</span>
               </button>
             )}
           </div>

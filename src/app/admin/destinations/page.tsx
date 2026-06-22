@@ -9,6 +9,25 @@ import type { Destination } from "@/types/destination";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import ConfirmDialog from "../../../component/ConfirmDialog";
+import {
+  Search,
+  MoreHorizontal,
+  Edit3,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  AlertCircle,
+  Inbox,
+  Filter,
+  Plus,
+  Map,
+  X,
+  Check,
+  ChevronDown,
+  Upload,
+  Loader2,
+} from "lucide-react";
 
 // ==================== TYPES & CONSTANTS ====================
 interface DestinationFormData {
@@ -40,7 +59,7 @@ export default function AdminDestinationsPage() {
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
   // ==================== STATES ====================
@@ -50,9 +69,28 @@ export default function AdminDestinationsPage() {
 
   // Modal & Dialog States
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string | number; name: string } | null>(null);
+  const [editingDestination, setEditingDestination] =
+    useState<Destination | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    id: string | number;
+    name: string;
+  } | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
+  const [openCardMenuId, setOpenCardMenuId] = useState<string | number | null>(
+    null,
+  );
+
+  // Bulk Actions State
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(
+    new Set(),
+  );
+  const [bulkDialog, setBulkDialog] = useState<{
+    type: "delete";
+    ids: (string | number)[];
+    title: string;
+    message: string;
+  } | null>(null);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   // Form States
   const [formData, setFormData] = useState<DestinationFormData>({
@@ -66,7 +104,10 @@ export default function AdminDestinationsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imagePreview, setImagePreview] = useState<string[]>([]);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Search, Filter & Pagination States
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,7 +118,9 @@ export default function AdminDestinationsPage() {
   // ==================== EFFECTS ====================
   useEffect(() => {
     const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
       setAuthLoaded(true);
     };
@@ -85,18 +128,48 @@ export default function AdminDestinationsPage() {
   }, [supabase.auth]);
 
   useEffect(() => {
-    if (authLoaded) {
-      const role = user?.app_metadata?.role as string | undefined;
-      if (role !== "admin") {
-        router.push("/dashboard");
-      } else {
-        fetchDestinations();
+    let active = true;
+    const initializeAuth = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+
+        if (!active) return;
+        setUser(currentUser);
+
+        if (!currentUser) {
+          router.push("/dashboard");
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", currentUser.id)
+          .single();
+
+        if (profile?.role !== "admin") {
+          router.push("/dashboard");
+        } else {
+          fetchDestinations();
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+      } finally {
+        if (active) setAuthLoaded(true);
       }
-    }
-  }, [authLoaded, user, router]);
+    };
+    initializeAuth();
+    return () => {
+      active = false;
+    };
+  }, [supabase, router]);
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [searchQuery, activeCategory, destinations.length]);
 
   useEffect(() => {
@@ -106,6 +179,25 @@ export default function AdminDestinationsPage() {
       setImagePreview([]);
     }
   }, [editingDestination]);
+
+  useEffect(() => {
+    const closeMenus = () => setOpenCardMenuId(null);
+    window.addEventListener("click", closeMenus);
+    return () => window.removeEventListener("click", closeMenus);
+  }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsCategoryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   // ==================== API CALLS ====================
   const fetchDestinations = async () => {
@@ -132,10 +224,15 @@ export default function AdminDestinationsPage() {
       setError(null);
       const res = await fetch(`/api/destinations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
-      
+
       toast.success("ลบสถานที่เรียบร้อยแล้ว");
       setDestinations((prev) => prev.filter((d) => d.id !== id));
-      
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+
       if (displayedDestinations.length === 1 && page > 1) {
         setPage((p) => p - 1);
       }
@@ -148,11 +245,38 @@ export default function AdminDestinationsPage() {
     }
   };
 
+  const handleBulkActionConfirm = async () => {
+    if (!bulkDialog) return;
+    try {
+      setIsBulkProcessing(true);
+      const { ids } = bulkDialog;
+
+      // Supabase Delete In Bulk
+      const { error: deleteError } = await supabase
+        .from("destinations")
+        .delete()
+        .in("id", ids);
+
+      if (deleteError) throw deleteError;
+      toast.success(`ลบข้อมูลสถานที่จำนวน ${ids.length} รายการเรียบร้อยแล้ว`);
+
+      setSelectedIds(new Set());
+      setBulkDialog(null);
+      fetchDestinations();
+    } catch (err) {
+      toast.error("การทำรายการลบแบบกลุ่มล้มเหลว");
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     const method = editingDestination ? "PUT" : "POST";
-    const url = editingDestination ? `/api/destinations/${editingDestination.id}` : "/api/destinations";
+    const url = editingDestination
+      ? `/api/destinations/${editingDestination.id}`
+      : "/api/destinations";
     const payload = {
       ...formData,
       min_price: Number(formData.min_price) || 0,
@@ -167,7 +291,9 @@ export default function AdminDestinationsPage() {
       });
 
       if (res.ok) {
-        toast.success(editingDestination ? "อัปเดตข้อมูลสำเร็จ" : "เพิ่มสถานที่สำเร็จ");
+        toast.success(
+          editingDestination ? "อัปเดตข้อมูลสำเร็จ" : "เพิ่มสถานที่สำเร็จ",
+        );
         fetchDestinations();
         handleCloseModal();
       } else {
@@ -180,7 +306,7 @@ export default function AdminDestinationsPage() {
     }
   };
 
-  // ==================== HANDLERS & UTILS ====================
+  // ==================== HANDLERS ====================
   const handleOpenModal = (destination?: Destination) => {
     if (destination) {
       setEditingDestination(destination);
@@ -202,6 +328,7 @@ export default function AdminDestinationsPage() {
         min_price: 0,
         max_price: 0,
       });
+      setImagePreview([]);
     }
     setIsModalOpen(true);
   };
@@ -209,6 +336,7 @@ export default function AdminDestinationsPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingDestination(null);
+    setIsCategoryOpen(false);
   };
 
   const parseImageUrl = (urlData: any): string[] => {
@@ -237,458 +365,899 @@ export default function AdminDestinationsPage() {
     }
   };
 
+  const handleMenuToggle = (e: React.MouseEvent, id: string | number) => {
+    e.stopPropagation();
+    setOpenCardMenuId(openCardMenuId === id ? null : id);
+  };
+
+  const toggleSelectOne = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    id: string | number,
+  ) => {
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) {
+        displayedDestinations.forEach((d) => next.delete(d.id));
+      } else {
+        displayedDestinations.forEach((d) => next.add(d.id));
+      }
+      return next;
+    });
+  };
+
   // ==================== COMPUTED DATA ====================
   const filteredDestinations = useMemo(() => {
     return destinations.filter((d) => {
       const matchesSearch =
         d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (d.description?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+        (d.description?.toLowerCase() || "").includes(
+          searchQuery.toLowerCase(),
+        );
       const matchesCategory =
         activeCategory === "ทั้งหมด" ? true : d.category === activeCategory;
       return matchesSearch && matchesCategory;
     });
   }, [destinations, searchQuery, activeCategory]);
 
-  const totalPages = Math.ceil(filteredDestinations.length / itemsPerPage);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredDestinations.length / itemsPerPage),
+  );
   const displayedDestinations = useMemo(() => {
-    return filteredDestinations.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+    return filteredDestinations.slice(
+      (page - 1) * itemsPerPage,
+      page * itemsPerPage,
+    );
   }, [filteredDestinations, page]);
+
+  const allOnPageSelected = useMemo(() => {
+    return (
+      displayedDestinations.length > 0 &&
+      displayedDestinations.every((d) => selectedIds.has(d.id))
+    );
+  }, [displayedDestinations, selectedIds]);
 
   const stats = useMemo(() => {
     return {
       total: destinations.length,
-      free: destinations.filter((a) => a.max_price === 0).length,
-      paid: destinations.filter((a) => (a.max_price || 0) > 0).length,
+      free: destinations.filter((a) => a.max_price === 0 && a.min_price === 0)
+        .length,
+      paid: destinations.filter(
+        (a) => (a.max_price || 0) > 0 || (a.min_price || 0) > 0,
+      ).length,
     };
   }, [destinations]);
 
   // ==================== RENDER ====================
-  if (!authLoaded || loading) {
+  if (authLoaded && !user) {
     return (
-      <main className="max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8 min-h-screen">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <div className="h-8 w-48 bg-slate-200 rounded-lg animate-pulse mb-2"></div>
-            <div className="h-4 w-64 bg-slate-100 rounded-md animate-pulse"></div>
+      <main className="max-w-6xl mx-auto py-20 px-4 flex justify-center font-sans text-zinc-900">
+        <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center max-w-sm w-full shadow-sm flex flex-col items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-center text-zinc-400 mb-4 shadow-inner">
+            <AlertCircle size={18} />
           </div>
-          <div className="h-10 w-32 bg-slate-200 rounded-xl animate-pulse"></div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm h-24 animate-pulse">
-              <div className="h-4 w-24 bg-slate-100 rounded mb-3"></div>
-              <div className="h-8 w-12 bg-slate-200 rounded"></div>
-            </div>
-          ))}
-        </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex gap-5 p-5 bg-white border border-slate-100 rounded-2xl h-48 animate-pulse">
-              <div className="w-60 bg-slate-100 rounded-xl h-full flex-shrink-0"></div>
-              <div className="flex-1 flex flex-col justify-between py-1">
-                <div>
-                  <div className="h-4 w-32 bg-slate-100 rounded mb-3"></div>
-                  <div className="h-6 w-3/4 bg-slate-200 rounded mb-4"></div>
-                  <div className="h-4 w-full bg-slate-50 rounded mb-2"></div>
-                  <div className="h-4 w-2/3 bg-slate-50 rounded"></div>
-                </div>
-              </div>
-            </div>
-          ))}
+          <h2 className="text-sm font-semibold text-zinc-900 mb-1">
+            จำเป็นต้องเข้าสู่ระบบ
+          </h2>
+          <p className="text-zinc-500 text-xs max-w-xs mx-auto leading-relaxed">
+            กรุณาเข้าสู่ระบบด้วยบัญชีแอดมินก่อนตรวจสอบและจัดการข้อมูลระบบหลังบ้าน
+          </p>
         </div>
       </main>
     );
   }
 
-  // หากโหลด Session เสร็จแล้วแต่ไม่ใช่แอดมิน (ป้องกันการกระพริบระหว่างรอ Redirect)
-  if (!user || user.app_metadata?.role !== "admin") {
-    return null; 
-  }
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24">
-      <main className="max-w-6xl mx-auto pt-8 px-4 sm:px-6 lg:px-8">
-        {/* Header Section */}
+    <div className="min-h-screen bg-zinc-50 pb-24 font-sans text-zinc-900 selection:bg-blue-100 selection:text-blue-900">
+      <main className="max-w-6xl mx-auto pt-10 px-4 sm:px-6 lg:px-8">
+        {/* ─── 1. PREMIUM HEADER ─── */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8"
         >
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">จัดการสถานที่ท่องเที่ยว</h1>
-            <p className="text-slate-500 mt-1 text-sm font-medium">เพิ่ม แก้ไข และจัดระเบียบสถานที่ท่องเที่ยวในระบบ</p>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br
+    from-blue-600
+    via-blue-500
+    to-indigo-700
+    border border-white/10
+    shadow-[0_8px_30px_rgba(37,99,235,0.35)]
+    hover:shadow-[0_12px_40px_rgba(37,99,235,0.5)] text-white"
+            >
+              <Map size={22} strokeWidth={2.2} />
+            </div>
+
+            <div>
+              <h1 className="text-2xl font-bold text-zinc-900">
+                จัดการสถานที่ท่องเที่ยว
+              </h1>
+
+              <p className="mt-1 text-sm text-zinc-500">
+                จัดการฐานข้อมูลสถานที่ท่องเที่ยว จุดเช็คอิน และแลนด์มาร์ค
+              </p>
+            </div>
           </div>
+
           <button
             onClick={() => handleOpenModal()}
-            className="group relative bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 flex items-center gap-2 font-medium overflow-hidden"
+            className="
+    group relative overflow-hidden
+    w-full sm:w-auto
+    rounded-xl
+    px-5 py-2.5
+    text-sm font-semibold tracking-wide
+    text-white
+    bg-gradient-to-br
+    from-blue-600
+    to-blue-500
+    border border-white/10
+    shadow-[0_8px_30px_rgba(37,99,235,0.35)]
+    hover:shadow-[0_12px_40px_rgba(37,99,235,0.5)]
+    transition-all duration-300
+    hover:-translate-y-0.5
+    active:translate-y-0
+    active:scale-[0.98]
+    flex items-center justify-center gap-2
+  "
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus
+              size={16}
+              strokeWidth={2.5}
+              className="transition-transform duration-300 group-hover:rotate-90"
+            />
             เพิ่มสถานที่ใหม่
           </button>
         </motion.div>
 
-        {/* Error Banner */}
         <AnimatePresence>
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="bg-red-50 border border-red-100 p-4 rounded-xl mb-6 text-red-600 text-sm flex items-center gap-3"
+              className="bg-red-50 border border-red-200 p-3.5 rounded-xl mb-6 text-red-700 text-xs font-medium flex items-center gap-2.5"
             >
-              <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              {error}
+              <AlertCircle size={14} className="shrink-0 text-red-500" />
+              <span>{error}</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        {/* ─── STATS PANELS ─── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {[
-            { label: "สถานที่ทั้งหมด (Total)", value: stats.total, color: "bg-slate-500", dot: false },
-            { label: "เข้าชมฟรี (Free)", value: stats.free, color: "bg-emerald-500", dot: true },
-            { label: "มีค่าใช้จ่าย (Paid)", value: stats.paid, color: "bg-blue-500", dot: true },
+            {
+              label: "Total Destinations",
+              value: stats.total,
+              color: "bg-blue-600",
+            },
+            {
+              label: "Free Entry",
+              value: stats.free,
+              color: "bg-emerald-500",
+              dot: true,
+            },
+            {
+              label: "Paid Entry",
+              value: stats.paid,
+              color: "bg-blue-500",
+              dot: true,
+            },
           ].map((stat, idx) => (
             <motion.div
               key={idx}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.1 }}
-              className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow"
+              transition={{ delay: idx * 0.05 }}
+              className="bg-white p-5 rounded-xl border border-zinc-200 shadow-sm flex flex-col"
             >
-              <div className="flex items-center gap-2 mb-2">
-                {stat.dot && <span className={`w-2 h-2 rounded-full ${stat.color}`}></span>}
-                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+              <div className="flex items-center gap-1.5 mb-1 text-zinc-500 select-none">
+                {stat.dot && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${stat.color}`} />
+                )}
+                <p className="text-xs font-medium">{stat.label}</p>
               </div>
-              <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
+              <p className="text-2xl font-semibold text-zinc-900 tracking-tight">
+                {loading ? "-" : stat.value}
+              </p>
             </motion.div>
           ))}
         </div>
 
-        {/* Filter & Search Bar */}
+        {/* ─── 2. THE UNIFIED COMMAND BOX ─── */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          className="bg-white p-3 rounded-2xl border border-zinc-200/80 shadow-sm mb-6 space-y-3"
         >
-          <div className="flex overflow-x-auto hide-scrollbar bg-slate-200/50 p-1 rounded-xl w-full md:w-auto relative">
-            {CATEGORIES.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveCategory(tab)}
-                className={`relative whitespace-nowrap px-5 py-2 rounded-lg text-sm font-medium transition-colors z-10 ${
-                  activeCategory === tab ? "text-slate-900" : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {activeCategory === tab && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute inset-0 bg-white rounded-lg shadow-sm"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    style={{ zIndex: -1 }}
-                  />
-                )}
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative w-full md:w-80 group">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-500 transition-colors">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
+          <div className="relative flex items-center">
+            <Search
+              className="absolute left-3.5 text-zinc-400 pointer-events-none"
+              size={16}
+            />
             <input
               type="text"
-              placeholder="ค้นหาชื่อสถานที่ หรือคำอธิบาย..."
+              placeholder="ค้นหาจากชื่อสถานที่ หรือคำอธิบาย (เช่น น้ำตก, ดอย, วัด)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-4 py-2.5 text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+              className="w-full pl-10 pr-9 py-2.5 bg-zinc-50/80 hover:bg-zinc-100/50 focus:bg-white border border-zinc-200/80 focus:border-zinc-400 rounded-xl text-xs text-zinc-900 placeholder:text-zinc-400 transition-all outline-none"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 text-zinc-400 hover:text-zinc-600 p-1 rounded-md transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between overflow-x-auto pt-0.5 pb-1 scrollbar-none">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider pl-1 pr-1.5 flex items-center gap-1 shrink-0 select-none">
+                <Filter size={12} /> หมวดหมู่:
+              </span>
+              {CATEGORIES.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveCategory(tab)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 select-none ${
+                    activeCategory === tab
+                      ? "bg-blue-600 text-white font-semibold shadow-sm"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-blue-600"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {!loading && filteredDestinations.length > 0 && (
+              <div className="flex items-center gap-2 pl-4 text-xs text-zinc-400 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={allOnPageSelected}
+                  onChange={toggleSelectAllOnPage}
+                  className="w-3.5 h-3.5 rounded border-zinc-300 text-zinc-900 accent-zinc-900 cursor-pointer"
+                  id="select-all"
+                />
+                <label
+                  htmlFor="select-all"
+                  className="cursor-pointer hover:text-zinc-600 select-none"
+                >
+                  เลือกทั้งหมด
+                </label>
+              </div>
+            )}
           </div>
         </motion.div>
 
-        {/* Destination List (List View) */}
-        <motion.div layout className="space-y-4">
-          <AnimatePresence mode="popLayout">
-            {filteredDestinations.length === 0 ? (
+        {/* ─── 3. CORE CARD STREAM ─── */}
+        <div className="min-h-100 space-y-4">
+          <AnimatePresence mode="wait">
+            {loading ? (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center min-h-80"
+                key="skeleton"
+                className="space-y-4"
+                exit={{ opacity: 0 }}
               >
-                <div className="bg-slate-50 p-4 rounded-full mb-4">
-                  <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-5 animate-pulse"
+                  >
+                    <div className="w-full sm:w-60 aspect-16/10 rounded-xl bg-zinc-100 shrink-0" />
+                    <div className="flex-1 flex flex-col justify-between py-1 space-y-4">
+                      <div className="space-y-2.5">
+                        <div className="h-3.5 bg-zinc-100 rounded w-1/3" />
+                        <div className="h-5 bg-zinc-200 rounded w-3/4" />
+                        <div className="h-4 bg-zinc-100 rounded w-full mt-3" />
+                      </div>
+                      <div className="pt-3 border-t border-zinc-100 flex justify-between">
+                        <div className="h-3 bg-zinc-100 rounded w-24" />
+                        <div className="h-4 bg-zinc-200 rounded w-20" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            ) : filteredDestinations.length === 0 ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-white border border-zinc-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center border-dashed"
+              >
+                <div className="w-12 h-12 bg-zinc-50 border border-zinc-200 rounded-2xl flex items-center justify-center mb-3 text-zinc-400">
+                  <Inbox size={20} />
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-1">ไม่พบสถานที่ท่องเที่ยว</h3>
-                <p className="text-slate-500 text-sm max-w-sm">ไม่พบข้อมูลที่ตรงกับการค้นหา ลองปรับคำค้นหาใหม่ หรือคลิก "เพิ่มสถานที่ใหม่" เพื่อสร้างรายการ</p>
+                <h3 className="text-sm font-semibold text-zinc-900">
+                  ไม่พบสถานที่ท่องเที่ยว
+                </h3>
+                <p className="text-zinc-500 text-xs mt-1">
+                  ยังไม่มีข้อมูลที่ตรงกับการค้นหาในหมวดหมู่นี้
+                </p>
               </motion.div>
             ) : (
-              displayedDestinations.map((d) => {
-                const parsedImages = parseImageUrl(d.image_url);
-                const displayImgUrl = parsedImages.length > 0 ? parsedImages[0] : null;
+              <motion.div key="card-list" layout className="space-y-4">
+                {displayedDestinations.map((d, index) => {
+                  const isSelected = selectedIds.has(d.id);
+                  const parsedImages = parseImageUrl(d.image_url);
+                  const displayImgUrl =
+                    parsedImages.length > 0 ? parsedImages[0] : null;
 
-                return (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    key={d.id}
-                    className="group bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-300 transition-all p-4 flex flex-col sm:flex-row gap-5"
-                  >
-                    {/* Image Container */}
-                    <div className="relative w-full sm:w-60 aspect-[16/10] flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                      {displayImgUrl ? (
-                        <>
-                          <Image src={displayImgUrl} alt={d.name} fill className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
-                          {parsedImages.length > 1 && (
-                            <div className="absolute bottom-2 right-2 bg-slate-900/70 backdrop-blur-md text-white text-[11px] font-medium px-2 py-1 rounded-md">
-                              +{parsedImages.length - 1}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-300">
-                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                  return (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.2, delay: index * 0.04 }}
+                      key={d.id}
+                      onClick={() => handleOpenModal(d)}
+                      className={`group bg-white rounded-2xl p-4 transition-all flex flex-col sm:flex-row gap-5 relative cursor-pointer border ${
+                        isSelected
+                          ? "border-blue-900 shadow-md ring-1 ring-blue-900/10 bg-blue-50/40"
+                          : "border-blue-200/80 shadow-sm hover:shadow-md hover:border-blue-300"
+                      }`}
+                    >
+                      {/* THUMBNAIL BLOCK */}
+                      <div className="relative w-full sm:w-60 aspect-16/10 shrink-0 rounded-xl overflow-hidden bg-zinc-100 border border-blue-200/50 flex items-center justify-center">
+                        {displayImgUrl ? (
+                          <>
+                            <Image
+                              src={displayImgUrl}
+                              alt={d.name}
+                              fill
+                              sizes="(max-width: 640px) 100vw, 240px"
+                              className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                            />
+                            {parsedImages.length > 1 && (
+                              <div className="absolute bottom-2 right-2 bg-zinc-900/70 backdrop-blur-md text-white text-[11px] font-medium px-2 py-0.5 rounded-md">
+                                +{parsedImages.length - 1} รูป
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <ImageIcon size={28} className="text-zinc-300" />
+                        )}
+
+                        <div
+                          className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="bg-pink-400/75 border-[#EC4899] shadow-pink-200 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-md tracking-wider shadow-sm">
+                            สถานที่ท่องเที่ยว
+                          </span>
                         </div>
-                      )}
-                    </div>
+                      </div>
 
-                    {/* Content Container */}
-                    <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
-                      <div>
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{d.category}</span>
-                            </div>
-                            <h3 className="text-lg font-bold text-slate-900 leading-tight truncate pr-4">{d.name}</h3>
+                      {/* CONTENT DETAILS BLOCK */}
+                      <div className="flex-1 flex flex-col justify-between min-w-0 py-0.5">
+                        <div className="relative pr-8">
+                          {/* 3-Dot Menu */}
+                          <div
+                            className="absolute top-0 right-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={(e) => handleMenuToggle(e, d.id)}
+                              className="p-1 text-zinc-400 hover:text-zinc-700 rounded-md transition-colors"
+                            >
+                              <MoreHorizontal size={18} />
+                            </button>
+                            <AnimatePresence>
+                              {openCardMenuId === d.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95, y: 5 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                                  className="absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-zinc-200 py-1 z-50 text-left overflow-hidden"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      handleOpenModal(d);
+                                      setOpenCardMenuId(null);
+                                    }}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 font-medium"
+                                  >
+                                    <Edit3
+                                      size={13}
+                                      className="text-zinc-400"
+                                    />{" "}
+                                    แก้ไขข้อมูล
+                                  </button>
+                                  <div className="h-px bg-zinc-100 my-1" />
+                                  <button
+                                    onClick={() => {
+                                      setDeleteConfirm({
+                                        id: d.id,
+                                        name: d.name,
+                                      });
+                                      setOpenCardMenuId(null);
+                                    }}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium"
+                                  >
+                                    <Trash2
+                                      size={13}
+                                      className="text-red-500/70"
+                                    />{" "}
+                                    ลบข้อมูลออก
+                                  </button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                          {/* Price Right Aligned */}
-                          <div className="text-right flex-shrink-0">
-                            {d.max_price === 0 ? (
-                              <div className="flex flex-col items-end">
-                                <span className="text-xl font-extrabold text-emerald-600 leading-none">เข้าชมฟรี</span>
-                              </div>
+
+                          <div className="flex items-center gap-2 text-xs text-blue-800 font-medium truncate mb-1.5 pr-6">
+                            <span>{d.category || "ทั่วไป"}</span>
+                            <span className="text-zinc-300">•</span>
+                            <span className="truncate">จุดท่องเที่ยวแนะนำ</span>
+                          </div>
+
+                          <h3 className="text-lg font-bold text-zinc-900 tracking-tight truncate leading-tight">
+                            {d.name}
+                          </h3>
+
+                          <p className="text-sm text-zinc-500 mt-2 line-clamp-2 leading-relaxed pr-4">
+                            {d.description ||
+                              "ไม่มีคำอธิบายเพิ่มเติมสำหรับสถานที่นี้"}
+                          </p>
+                        </div>
+
+                        {/* Faint Footer Bar */}
+                        <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-400">
+                          <div className="flex items-center gap-3 truncate">
+                            <span className="italic text-zinc-400">
+                              เปิดให้บริการทุกวัน
+                            </span>
+                          </div>
+
+                          <div className="font-bold text-zinc-900 text-sm shrink-0 pl-2">
+                            {d.max_price === 0 && d.min_price === 0 ? (
+                              <span className="text-emerald-600">
+                                เข้าชมฟรี
+                              </span>
                             ) : (
-                              <div className="flex flex-col items-end">
-                                <span className="text-xl font-extrabold text-slate-900 leading-none">
-                                  ฿{d.min_price} <span className="text-base font-semibold text-slate-600">- {d.max_price}</span>
-                                </span>
-                              </div>
+                              `฿${d.min_price} - ${d.max_price}`
                             )}
                           </div>
                         </div>
-                        <p className="text-sm text-slate-500 mt-2.5 line-clamp-2 leading-relaxed pr-4">
-                          {d.description || "ไม่มีคำอธิบายเพิ่มเติม"}
-                        </p>
                       </div>
-
-                      {/* Footer Actions */}
-                      <div className="flex items-center justify-end mt-4 pt-4 border-t border-slate-100">
-                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
-                          <button
-                            onClick={() => handleOpenModal(d)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="แก้ไขข้อมูล"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm({ id: d.id, name: d.name })}
-                            disabled={deletingId === d.id}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="ลบสถานที่"
-                          >
-                            {deletingId === d.id ? (
-                              <svg className="animate-spin h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                            ) : (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
 
-        {/* Premium Pagination */}
-        {totalPages > 1 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between mt-8 px-2 sm:px-0">
-            <p className="hidden sm:block text-sm text-slate-500">
-              แสดง <span className="font-semibold text-slate-900">{(page - 1) * itemsPerPage + 1}</span> ถึง{" "}
-              <span className="font-semibold text-slate-900">{Math.min(page * itemsPerPage, filteredDestinations.length)}</span> จากทั้งหมด{" "}
-              <span className="font-semibold text-slate-900">{filteredDestinations.length}</span> รายการ
+        {/* ─── PREMIUM PAGINATION ─── */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between mt-8 px-1">
+            <p className="hidden sm:block text-xs text-zinc-400 font-medium">
+              Showing{" "}
+              <span className="text-zinc-900">
+                {(page - 1) * itemsPerPage + 1}
+              </span>{" "}
+              to{" "}
+              <span className="text-zinc-900">
+                {Math.min(page * itemsPerPage, filteredDestinations.length)}
+              </span>{" "}
+              of{" "}
+              <span className="text-zinc-900">
+                {filteredDestinations.length}
+              </span>{" "}
+              entries
             </p>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
               <button
                 disabled={page === 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-md hover:bg-blue-50 hover:text-blue-900 disabled:opacity-30 transition-all"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                <span className="hidden sm:inline">ก่อนหน้า</span>
+                <ChevronLeft size={14} />
+                <span>Previous</span>
               </button>
-
               <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all flex items-center justify-center ${
-                      page === pageNum ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                ))}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                  (pNum) => (
+                    <button
+                      key={pNum}
+                      onClick={() => setPage(pNum)}
+                      className={`w-7 h-7 rounded-md text-xs font-medium transition-all flex items-center justify-center ${page === pNum ? "bg-blue-800 text-white font-semibold" : "text-blue-500 hover:bg-blue-100"}`}
+                    >
+                      {pNum}
+                    </button>
+                  ),
+                )}
               </div>
-
               <button
                 disabled={page === totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-md hover:bg-blue-50 hover:text-zinc-900 disabled:opacity-30 transition-all"
               >
-                <span className="hidden sm:inline">ถัดไป</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                <span>Next</span>
+                <ChevronRight size={14} />
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* Form Modal */}
+        {/* ─── VERCEL-STYLE FLOATING COMMAND BAR ─── */}
+        <AnimatePresence>
+          {selectedIds.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
+            >
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900 text-white rounded-full shadow-2xl border border-zinc-800 text-xs font-medium">
+                <span className="text-zinc-300">
+                  เลือกแล้ว{" "}
+                  <span className="text-white font-bold">
+                    {selectedIds.size}
+                  </span>{" "}
+                  รายการ
+                </span>
+                <div className="w-px h-4 bg-zinc-700" />
+                <button
+                  onClick={() =>
+                    setBulkDialog({
+                      type: "delete",
+                      ids: Array.from(selectedIds),
+                      title: "Delete Destinations",
+                      message: `ยืนยันการลบสถานที่ท่องเที่ยว ${selectedIds.size} รายการอย่างถาวร?`,
+                    })
+                  }
+                  className="text-red-400 hover:text-red-300 px-2 py-1 rounded transition-colors"
+                >
+                  Delete Selected
+                </button>
+                <div className="w-px h-4 bg-zinc-700 ml-1" />
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-full"
+                  aria-label="Clear"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ─── INLINE PREMIUM EDITOR MODAL ─── */}
         <AnimatePresence>
           {isModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 font-sans select-none">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={handleCloseModal}
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                onClick={!isSubmitting ? handleCloseModal : undefined}
+                className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
               />
-
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                initial={{ opacity: 0, scale: 0.96, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-                className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col max-h-[90vh] overflow-hidden"
+                exit={{ opacity: 0, scale: 0.96, y: 15 }}
+                transition={{ duration: 0.23, ease: "easeOut" }}
+                className="relative w-full max-w-2xl bg-white rounded-xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-zinc-200/50 flex flex-col max-h-[85vh] overflow-hidden"
               >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-                  <h2 className="text-xl font-bold text-slate-900">
-                    {editingDestination ? "แก้ไขข้อมูลสถานที่" : "เพิ่มสถานที่ท่องเที่ยวใหม่"}
-                  </h2>
-                  <button onClick={handleCloseModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 bg-white z-10 shrink-0">
+                  <div>
+                    <h2 className="text-[16px] font-semibold text-zinc-900 tracking-tight flex items-center gap-2">
+                      <Map size={16} className="text-zinc-500" />
+                      {editingDestination
+                        ? "Edit Destination"
+                        : "New Destination"}
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {editingDestination
+                        ? "แก้ไขข้อมูลสถานที่ท่องเที่ยว"
+                        : "เพิ่มจุดเช็คอินใหม่เข้าสู่ระบบ"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    disabled={isSubmitting}
+                    className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <X size={16} strokeWidth={2.2} />
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                  <form id="destination-form" onSubmit={handleSubmit} className="space-y-6">
-                    {/* Image Drag & Drop */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">รูปภาพสถานที่ <span className="text-red-500">*</span></label>
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white">
+                  <form
+                    id="destination-modal-form"
+                    onSubmit={handleSubmit}
+                    className="space-y-6"
+                  >
+                    {/* Image Area */}
+                    <div>
+                      <label className="block text-[13px] font-medium text-zinc-700 mb-2">
+                        รูปภาพแลนด์มาร์ค{" "}
+                        <span className="text-zinc-400 font-normal">
+                          (Thumbnail)
+                        </span>
+                      </label>
                       <div
-                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                        onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragging(true);
+                        }}
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          setIsDragging(false);
+                        }}
                         onDrop={handleDrop}
                         onClick={() => fileInputRef.current?.click()}
-                        className={`relative w-full h-48 rounded-xl border-2 overflow-hidden cursor-pointer transition-all duration-300 group ${
-                          isDragging ? "border-blue-500 bg-blue-50" : imagePreview.length > 0 || formData.image_url.length > 0 ? "border-transparent" : "border-dashed border-slate-300 hover:border-slate-400 bg-slate-50"
+                        className={`relative flex flex-col items-center justify-center w-full min-h-35 p-2 transition-all border border-dashed rounded-lg cursor-pointer overflow-hidden ${
+                          isDragging
+                            ? "border-zinc-500 bg-zinc-100/80"
+                            : imagePreview.length > 0 ||
+                                formData.image_url.length > 0
+                              ? "border-transparent bg-zinc-50"
+                              : "border-zinc-300 hover:border-zinc-400 bg-zinc-50/50 hover:bg-zinc-50"
                         }`}
                       >
-                        <input type="file" ref={fileInputRef} onChange={(e) => { if (e.target.files?.[0]) handleImageProcessing(e.target.files[0]); }} accept="image/*" className="hidden" />
-                        
-                        {(imagePreview.length > 0 || formData.image_url.length > 0) ? (
-                          <div className="relative w-full h-full">
-                            <img src={imagePreview.length > 0 ? imagePreview[0] : formData.image_url[0]} alt="Preview" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <span className="text-sm font-medium text-white bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm">เปลี่ยนรูปภาพ</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-                            <svg className={`w-10 h-10 mb-2 transition-colors ${isDragging ? "text-blue-500" : "text-slate-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                            <p className="text-sm font-medium"><span className="text-blue-600">คลิกเพื่ออัปโหลด</span> หรือลากไฟล์มาวาง</p>
-                          </div>
-                        )}
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={(e) => {
+                            if (e.target.files?.[0])
+                              handleImageProcessing(e.target.files[0]);
+                          }}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <AnimatePresence mode="wait">
+                          {imagePreview.length > 0 ||
+                          formData.image_url.length > 0 ? (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="relative w-full h-48 sm:h-56 rounded-md overflow-hidden group border border-zinc-200/50 shadow-sm"
+                            >
+                              <img
+                                src={
+                                  imagePreview.length > 0
+                                    ? imagePreview[0]
+                                    : formData.image_url[0]
+                                }
+                                alt=""
+                                className="absolute inset-0 w-full h-full object-cover blur-md opacity-50 scale-110"
+                              />
+                              <img
+                                src={
+                                  imagePreview.length > 0
+                                    ? imagePreview[0]
+                                    : formData.image_url[0]
+                                }
+                                alt="Preview"
+                                className="relative h-full w-full object-contain"
+                              />
+                              <div className="absolute inset-0 bg-zinc-950/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                                <span className="text-white flex items-center gap-1.5 text-xs font-medium bg-zinc-950/60 border border-white/10 px-3 py-1.5 rounded-md backdrop-blur-md">
+                                  <Upload size={14} /> เปลี่ยนรูปภาพ
+                                </span>
+                              </div>
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              className="flex flex-col items-center text-center space-y-2 py-8"
+                            >
+                              <div className="p-2.5 bg-white shadow-sm border border-zinc-200 rounded-lg text-zinc-400 mb-1">
+                                <ImageIcon size={22} strokeWidth={1.5} />
+                              </div>
+                              <div>
+                                <p className="text-[13px] font-medium text-zinc-900">
+                                  คลิกเพื่อเลือกไฟล์{" "}
+                                  <span className="font-normal text-zinc-500">
+                                    หรือลากรูปมาวางที่นี่
+                                  </span>
+                                </p>
+                                <p className="text-[11px] text-zinc-400 mt-1">
+                                  รองรับไฟล์ JPG, PNG, WEBP
+                                </p>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">ชื่อสถานที่ <span className="text-red-500">*</span></label>
-                      <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="เช่น อุทยานแห่งชาติเขาใหญ่" className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700">คำอธิบายสถานที่ <span className="text-red-500">*</span></label>
-                      <textarea required rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="จุดเด่น สิ่งที่น่าสนใจ..." className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none resize-none" />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700">หมวดหมู่</label>
-                        <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value as Destination["category"] })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none bg-white">
-                          {CATEGORIES.filter((c) => c !== "ทั้งหมด").map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
+                      <div className="sm:col-span-1 space-y-1.5">
+                        <label className="text-[13px] font-medium text-zinc-700">
+                          ชื่อสถานที่ <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.name}
+                          onChange={(e) =>
+                            setFormData({ ...formData, name: e.target.value })
+                          }
+                          className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+                          placeholder="เช่น น้ำตกเอราวัณ"
+                        />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700">เริ่มต้น (บาท)</label>
-                        <input type="number" min="0" value={formData.min_price} onChange={(e) => setFormData({ ...formData, min_price: e.target.value })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
+                      {/* Custom Category Dropdown */}
+                      <div
+                        className="sm:col-span-1 space-y-1.5"
+                        ref={dropdownRef}
+                      >
+                        <label className="text-[13px] font-medium text-zinc-700">
+                          หมวดหมู่
+                        </label>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                            className={`w-full pl-3 pr-3 py-2 text-sm border rounded-lg bg-white transition-all flex items-center justify-between focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 ${isCategoryOpen ? "border-zinc-400 ring-4 ring-zinc-900/5" : "border-zinc-200 hover:border-zinc-300"} text-zinc-900`}
+                          >
+                            <span>{formData.category}</span>
+                            <ChevronDown
+                              size={14}
+                              className={`text-zinc-400 transition-transform duration-200 ${isCategoryOpen ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                          <AnimatePresence>
+                            {isCategoryOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                                transition={{ duration: 0.13 }}
+                                className="absolute z-50 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-[0_12px_30px_-10px_rgba(0,0,0,0.1)] py-1 overflow-hidden"
+                              >
+                                <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                  {CATEGORIES.filter(
+                                    (c) => c !== "ทั้งหมด",
+                                  ).map((cat) => (
+                                    <button
+                                      key={cat}
+                                      type="button"
+                                      onClick={() => {
+                                        setFormData({
+                                          ...formData,
+                                          category:
+                                            cat as Destination["category"],
+                                        });
+                                        setIsCategoryOpen(false);
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-zinc-50 flex items-center justify-between transition-colors group text-zinc-700 hover:text-zinc-900"
+                                    >
+                                      <span>{cat}</span>
+                                      {formData.category === cat && (
+                                        <Check
+                                          size={12}
+                                          className="text-zinc-900 shrink-0"
+                                        />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700">สูงสุด (บาท)</label>
-                        <input type="number" min="0" value={formData.max_price} onChange={(e) => setFormData({ ...formData, max_price: e.target.value })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
+
+                      <div className="sm:col-span-2 space-y-1.5">
+                        <label className="text-[13px] font-medium text-zinc-700">
+                          รายละเอียดสถานที่
+                        </label>
+                        <textarea
+                          value={formData.description}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              description: e.target.value,
+                            })
+                          }
+                          rows={3}
+                          className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400 resize-none leading-relaxed"
+                          placeholder="ประวัติ, จุดเด่น, หรือข้อมูลการเดินทาง..."
+                        />
+                      </div>
+
+                      <div className="sm:col-span-1 space-y-1.5">
+                        <label className="text-[13px] font-medium text-zinc-700">
+                          ค่าเข้าชมเริ่มต้น{" "}
+                          <span className="text-zinc-400 font-normal">
+                            (บาท)
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.min_price}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              min_price: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-1 space-y-1.5">
+                        <label className="text-[13px] font-medium text-zinc-700">
+                          ค่าเข้าชมสูงสุด{" "}
+                          <span className="text-zinc-400 font-normal">
+                            (บาท)
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.max_price}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              max_price: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+                          placeholder="0"
+                        />
                       </div>
                     </div>
                   </form>
                 </div>
 
-                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                  <button type="button" onClick={handleCloseModal} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-50">
+                <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    disabled={isSubmitting}
+                    className="px-4 py-2 text-[13px] font-medium text-zinc-600 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 hover:text-zinc-900 active:scale-[0.98] transition-all disabled:opacity-50"
+                  >
                     ยกเลิก
                   </button>
-                  <button form="destination-form" type="submit" disabled={isSubmitting} className="flex items-center justify-center px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-all min-w-32 disabled:opacity-70">
+                  <button
+                    form="destination-modal-form"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-30"
+                  >
                     {isSubmitting ? (
-                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
+                      <span className="flex items-center gap-2">
+                        <Loader2
+                          size={14}
+                          className="animate-spin text-zinc-400"
+                        />{" "}
+                        บันทึก...
+                      </span>
+                    ) : editingDestination ? (
+                      "บันทึกการแก้ไข"
                     ) : (
-                      editingDestination ? "บันทึกการแก้ไข" : "ยืนยันการเพิ่ม"
+                      "เพิ่มสถานที่"
                     )}
                   </button>
                 </div>
@@ -697,18 +1266,39 @@ export default function AdminDestinationsPage() {
           )}
         </AnimatePresence>
 
+        {/* ─── GLOBAL CONFIRM DIALOGS ─── */}
         <ConfirmDialog
           open={!!deleteConfirm}
-          onCancel={() => setDeleteConfirm(null)}
-          onConfirm={handleConfirmDelete}
-          title="ยืนยันการลบสถานที่"
+          danger={true}
+          loading={!!deletingId}
+          title="Delete Destination"
           message={
-            <span className="text-slate-600">
-              คุณต้องการลบสถานที่ <span className="font-semibold text-slate-900">"{deleteConfirm?.name}"</span> หรือไม่? ข้อมูลและรูปภาพจะถูกลบอย่างถาวร
+            <span className="text-zinc-500 text-xs block mt-1">
+              ยืนยันการลบ "{deleteConfirm?.name}" อย่างถาวร?
             </span>
           }
           confirmText="ลบข้อมูลถาวร"
           cancelText="ยกเลิก"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+
+        <ConfirmDialog
+          open={!!bulkDialog}
+          danger={bulkDialog?.type === "delete"}
+          loading={isBulkProcessing}
+          title={bulkDialog?.title || ""}
+          message={
+            <span className="text-zinc-500 text-xs block mt-1">
+              {bulkDialog?.message}
+            </span>
+          }
+          confirmText={
+            bulkDialog?.type === "delete" ? "ลบข้อมูลถาวร" : "ยืนยัน"
+          }
+          cancelText="ยกเลิก"
+          onConfirm={handleBulkActionConfirm}
+          onCancel={() => setBulkDialog(null)}
         />
       </main>
     </div>

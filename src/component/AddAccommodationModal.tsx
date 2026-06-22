@@ -1,10 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
+import { 
+  X, 
+  Upload, 
+  Image as ImageIcon, 
+  Loader2, 
+  Building2, 
+  DollarSign, 
+  FileText, 
+  MapPin, 
+  Phone, 
+  ChevronDown, 
+  Check, 
+  AlertCircle, 
+  Trash2
+} from "lucide-react";
 
 interface Accommodation {
   id: string;
@@ -43,7 +58,6 @@ export const AddAccommodationModal = ({
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // ดึงข้อมูล User เมื่อ Modal ถูกเปิด
   useEffect(() => {
     if (isOpen) {
       const fetchUser = async () => {
@@ -74,8 +88,14 @@ export const AddAccommodationModal = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Custom Dropdown Active Toggle States
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
 
-  // Lock body scroll เมื่อ Modal เปิด
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Lock body scroll when modal is active
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -87,7 +107,18 @@ export const AddAccommodationModal = ({
     };
   }, [isOpen]);
 
-  // ตั้งค่าข้อมูลเริ่มต้นเมื่อเป็นการแก้ไข
+  // Handle outside click triggers to fold custom select popover
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsCategoryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  // Initialize form configuration state on edit trigger
   useEffect(() => {
     if (editAccommodation) {
       setFormData({
@@ -123,9 +154,12 @@ export const AddAccommodationModal = ({
     setImagePreviews([]);
     setExistingImages([]);
     setError(null);
+    setIsCategoryOpen(false);
   };
 
-  // ─── Image Processing ──────────────────────────────────────────────────────
+  const categories = ["หอพัก", "โรงแรม", "โฮมสเตย์", "อพาร์ทเมนท์", "คอนโด", "บ้านเช่า"];
+
+  // ─── Image Processing ───
   const processFiles = useCallback((files: File[]) => {
     const totalImages = existingImages.length + imageFiles.length + files.length;
     if (totalImages > 5) {
@@ -214,7 +248,7 @@ export const AddAccommodationModal = ({
     }
   };
 
-  // ─── Form Submission ───────────────────────────────────────────────────────
+  // ─── Form Submission ───
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -270,7 +304,7 @@ export const AddAccommodationModal = ({
           .from("accommodations")
           .insert({
             ...payload,
-            created_by: user.id, // ✅ ใช้ user.id ของ Supabase
+            created_by: user.id,
           });
 
         if (insertError) throw insertError;
@@ -295,247 +329,286 @@ export const AddAccommodationModal = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 font-sans select-none">
+          {/* Backdrop Blur Layer */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => {
-              resetForm();
-              onClose();
-            }}
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={(!submitting && !uploading) ? () => { resetForm(); onClose(); } : undefined}
+            className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
           />
 
-          {/* Modal Content */}
+          {/* Modal Architecture Surface */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.96, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-            className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            exit={{ opacity: 0, scale: 0.96, y: 15 }}
+            transition={{ duration: 0.23, ease: "easeOut" }}
+            className="relative w-full max-w-2xl bg-white rounded-xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-zinc-200/50 flex flex-col max-h-[85vh] overflow-hidden"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100">
-              <h2 className="text-xl font-semibold text-slate-800 tracking-tight">
-                {editAccommodation ? "แก้ไขที่พัก" : "เพิ่มที่พักใหม่"}
-              </h2>
+            {/* Modal Sub-Header Node */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 bg-white z-10 shrink-0">
+              <div>
+                <h2 className="text-[16px] font-semibold text-zinc-900 tracking-tight flex items-center gap-2">
+                  <Building2 size={16} className="text-zinc-500" />
+                  {editAccommodation ? "Edit Accommodation" : "Create New Listing"}
+                </h2>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  {editAccommodation ? "แก้ไขข้อมูลรายชื่อห้องพัก/หอพักหลังบ้าน" : "เพิ่มและจัดส่งข้อมูลรายชื่อหอพักใหม่เข้าสู่ระบบ"}
+                </p>
+              </div>
               <button
-                onClick={() => {
-                  resetForm();
-                  onClose();
-                }}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                type="button"
+                onClick={() => { resetForm(); onClose(); }}
+                disabled={submitting || uploading}
+                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X size={16} strokeWidth={2.2} />
               </button>
             </div>
 
-            {/* Scrollable Form Body */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-              <form id="accommodation-form" onSubmit={handleSubmit} className="space-y-8">
+            {/* Scrollable Form Deck */}
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white">
+              <form id="accommodation-form" onSubmit={handleSubmit} className="space-y-6">
                 
-                {/* Error Banner */}
+                {/* Dynamic Warning Error Bar */}
                 <AnimatePresence>
                   {error && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm border border-red-100 flex items-center gap-2"
+                      className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-xs font-medium border border-red-200/60 flex items-center gap-2"
                     >
-                      <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {error}
+                      <AlertCircle size={14} className="shrink-0 text-red-500" />
+                      <span>{error}</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Section: รูปภาพ */}
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-slate-700">
-                    รูปภาพที่พัก <span className="text-slate-400 font-normal">(สูงสุด 5 รูป)</span>
+                {/* MODULE LAYER: IMAGE MANAGEMENT DECK */}
+                <div className="space-y-2">
+                  <label className="block text-[13px] font-medium text-zinc-700">
+                    รูปภาพที่พักประกอบการตัดสินใจ <span className="text-zinc-400 font-normal">({totalImages}/5 รูป)</span>
                   </label>
                   
+                  {/* Grid Assets Stream */}
                   {(existingImages.length > 0 || imagePreviews.length > 0) && (
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-2">
                       {existingImages.map((image, index) => (
-                        <div key={`existing-${index}`} className="relative group aspect-square">
-                          <img src={image} alt={`Existing ${index + 1}`} className="w-full h-full object-cover rounded-xl border border-slate-200" />
-                          <button type="button" onClick={() => removeExistingImage(index)} className="absolute -top-2 -right-2 bg-white text-red-500 shadow-md rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
-                            ✕
-                          </button>
+                        <div key={`existing-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-200 shadow-sm bg-zinc-50">
+                          <img src={image} alt="" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-zinc-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button type="button" onClick={() => removeExistingImage(index)} className="p-1.5 bg-white text-zinc-900 shadow rounded-md hover:bg-zinc-50 hover:text-red-600 transition-all scale-95 group-hover:scale-100">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                       {imagePreviews.map((preview, index) => (
-                        <div key={`new-${index}`} className="relative group aspect-square">
-                          <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover rounded-xl border-2 border-blue-500" />
-                          <button type="button" onClick={() => removeNewImage(index)} className="absolute -top-2 -right-2 bg-white text-red-500 shadow-md rounded-full w-7 h-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:scale-110">
-                            ✕
-                          </button>
+                        <div key={`new-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border border-zinc-900/10 shadow-sm bg-zinc-50">
+                          <img src={preview} alt="" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-zinc-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button type="button" onClick={() => removeNewImage(index)} className="p-1.5 bg-white text-zinc-900 shadow rounded-md hover:bg-zinc-50 hover:text-red-600 transition-all scale-95 group-hover:scale-100">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                          <span className="absolute bottom-1 left-1 text-[8px] font-bold bg-zinc-900 text-white px-1 py-0.5 rounded">NEW</span>
                         </div>
                       ))}
                     </div>
                   )}
 
+                  {/* Dropzone Controller */}
                   {canAddMoreImages && (
                     <div
                       onDragOver={onDragOver}
                       onDragLeave={onDragLeave}
                       onDrop={onDrop}
-                      className={`relative flex justify-center w-full px-6 py-8 transition-all border-2 border-dashed rounded-2xl ${
-                        isDragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-slate-400 hover:bg-slate-50"
-                      }`}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`relative flex flex-col items-center justify-center w-full min-h-[140px] p-4 transition-all border border-dashed rounded-lg cursor-pointer
+                        ${isDragging ? "border-zinc-500 bg-zinc-100/70" : "border-zinc-300 hover:border-zinc-400 bg-zinc-50/50 hover:bg-zinc-50"}`}
                     >
-                      <input type="file" id="images-upload" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
-                      <label htmlFor="images-upload" className="flex flex-col items-center justify-center cursor-pointer space-y-2">
-                        <div className="p-3 bg-white shadow-sm rounded-full border border-slate-100">
-                          <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                        <p className="text-sm font-medium text-slate-600">คลิกเพื่อเลือกไฟล์ <span className="font-normal text-slate-500">หรือลากไฟล์มาวางที่นี่</span></p>
-                        <p className="text-xs text-slate-400">รองรับ JPG, PNG (ไม่เกิน 5MB) • อัปโหลดได้อีก {5 - totalImages} รูป</p>
-                      </label>
+                      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
+                      <div className="p-2 bg-white shadow-sm border border-zinc-200/80 rounded-md text-zinc-400 mb-2">
+                        <ImageIcon size={18} strokeWidth={1.8} />
+                      </div>
+                      <p className="text-xs font-medium text-zinc-900">
+                        คลิกเพื่อเลือกไฟล์รูปภาพ <span className="font-normal text-zinc-400">หรือลากรูปมาวางที่นี่</span>
+                      </p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">
+                        รองรับ JPG, PNG, WEBP (ไม่เกิน 5MB) · เพิ่มได้อีก {5 - totalImages} รูป
+                      </p>
                     </div>
                   )}
                 </div>
 
-                <hr className="border-slate-100" />
+                <div className="h-px bg-zinc-100" />
 
-                {/* Section: ข้อมูลทั่วไป */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* MODULE LAYER: GENERAL META INPUT FIELDS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-1 space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">ชื่อที่พัก <span className="text-red-400">*</span></label>
+                    <label className="text-[13px] font-medium text-zinc-700 flex items-center gap-1">
+                      <FileText size={13} className="text-zinc-400" /> ชื่อที่พัก <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
-                      placeholder="ระบุชื่อที่พัก"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+                      placeholder="ระบุชื่อหอพัก หรือชื่อโครงการที่พัก"
                     />
                   </div>
 
-                  <div className="md:col-span-1 space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">ประเภท <span className="text-red-400">*</span></label>
-                    <select
-                      required
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
-                    >
-                      <option value="หอพัก">หอพัก</option>
-                      <option value="โรงแรม">โรงแรม</option>
-                      <option value="โฮมสเตย์">โฮมสเตย์</option>
-                      <option value="อพาร์ทเมนท์">อพาร์ทเมนท์</option>
-                      <option value="คอนโด">คอนโด</option>
-                      <option value="บ้านเช่า">บ้านเช่า</option>
-                    </select>
+                  {/* CUSTOM PREMIUM DROPDOWN ENGINE */}
+                  <div className="md:col-span-1 space-y-1.5" ref={dropdownRef}>
+                    <label className="text-[13px] font-medium text-zinc-700">ประเภทที่พัก</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                        className={`w-full pl-3 pr-3 py-2 text-sm border rounded-lg bg-white transition-all flex items-center justify-between focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 ${
+                          isCategoryOpen ? "border-zinc-400 ring-4 ring-zinc-900/5" : "border-zinc-200 hover:border-zinc-300"
+                        } text-zinc-900`}
+                      >
+                        <span>{formData.category}</span>
+                        <ChevronDown size={14} className={`text-zinc-400 transition-transform duration-200 ${isCategoryOpen ? "rotate-180" : ""}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {isCategoryOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                            transition={{ duration: 0.13 }}
+                            className="absolute synchronized-dropdown z-50 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-[0_12px_30px_-10px_rgba(0,0,0,0.1)] py-1 overflow-hidden"
+                          >
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                              {categories.map((cat) => (
+                                <button
+                                  key={cat}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({ ...formData, category: cat });
+                                    setIsCategoryOpen(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-zinc-50 flex items-center justify-between transition-colors group text-zinc-700 hover:text-zinc-900"
+                                >
+                                  <span>{cat}</span>
+                                  {formData.category === cat && <Check size={12} className="text-zinc-900 shrink-0" />}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
 
                   <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">รายละเอียด</label>
+                    <label className="text-[13px] font-medium text-zinc-700">รายละเอียดเพิ่มเติม</label>
                     <textarea
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       rows={3}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400 resize-none"
-                      placeholder="จุดเด่น สิ่งอำนวยความสะดวก ฯลฯ"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400 resize-none leading-relaxed"
+                      placeholder="ระบุสิ่งอำนวยความสะดวก รายละเอียดค่าน้ำ/ค่าไฟ หรือจุดเด่นของโครงการ..."
                     />
                   </div>
 
                   <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">ที่อยู่</label>
+                    <label className="text-[13px] font-medium text-zinc-700 flex items-center gap-1">
+                      <MapPin size={13} className="text-zinc-400" /> ที่อยู่ตำแหน่งพิกัด
+                    </label>
                     <input
                       type="text"
                       value={formData.address}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
-                      placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล..."
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+                      placeholder="บ้านเลขที่, ซอย, ถนน, ตำบล, อำเภอ..."
                     />
                   </div>
                 </div>
 
-                <hr className="border-slate-100" />
+                <div className="h-px bg-zinc-100" />
 
-                {/* Section: ราคา */}
-                <div className="grid grid-cols-2 gap-5">
+                {/* MODULE LAYER: PRICING LOG deck */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">ราคาเริ่มต้น <span className="text-slate-400 font-normal">(บาท)</span> <span className="text-red-400">*</span></label>
+                    <label className="text-[13px] font-medium text-zinc-700 flex items-center gap-0.5">
+                      <DollarSign size={13} className="text-zinc-400" /> ราคาเริ่มต้น <span className="text-zinc-400 font-normal">(บาท)</span> <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="number"
                       required
                       value={formData.min_price}
                       onChange={(e) => setFormData({ ...formData, min_price: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
                       placeholder="0"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">ราคาสูงสุด <span className="text-slate-400 font-normal">(บาท / ไม่บังคับ)</span></label>
+                    <label className="text-[13px] font-medium text-zinc-700">ราคาสูงสุด <span className="text-zinc-400 font-normal">(บาท / ไม่บังคับ)</span></label>
                     <input
                       type="number"
                       value={formData.max_price}
                       onChange={(e) => setFormData({ ...formData, max_price: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
                       placeholder="0"
                     />
                   </div>
                 </div>
 
-                <hr className="border-slate-100" />
+                <div className="h-px bg-zinc-100" />
 
-                {/* Section: การติดต่อ */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* MODULE LAYER: CONTACT MATRIX DECK */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">เบอร์โทรติดต่อ</label>
+                    <label className="text-[13px] font-medium text-zinc-700 flex items-center gap-1">
+                      <Phone size={13} className="text-zinc-400" /> เบอร์โทรติดต่อ
+                    </label>
                     <input
                       type="tel"
                       value={formData.contact_phone}
                       onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
                       placeholder="08X-XXX-XXXX"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">LINE ID</label>
+                    <label className="text-[13px] font-medium text-zinc-700">LINE ID</label>
                     <input
                       type="text"
                       value={formData.contact_line}
                       onChange={(e) => setFormData({ ...formData, contact_line: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
                       placeholder="@lineid"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Facebook</label>
+                    <label className="text-[13px] font-medium text-zinc-700">Facebook</label>
                     <input
                       type="text"
                       value={formData.contact_facebook}
                       onChange={(e) => setFormData({ ...formData, contact_facebook: e.target.value })}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
-                      placeholder="ชื่อเพจ หรือ ลิงก์"
+                      className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
+                      placeholder="ชื่อเพจ หรือลิงก์โฮมเพจ"
                     />
                   </div>
                 </div>
               </form>
             </div>
 
-            {/* Footer / Actions */}
-            <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 rounded-b-2xl">
+            {/* Footer / Actions Menu Console */}
+            <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-2.5 shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  resetForm();
-                  onClose();
-                }}
+                onClick={() => { resetForm(); onClose(); }}
                 disabled={submitting || uploading}
-                className="px-6 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all disabled:opacity-50"
+                className="px-4 py-2 text-[13px] font-medium text-zinc-600 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 hover:text-zinc-900 active:scale-[0.98] transition-all disabled:opacity-50"
               >
                 ยกเลิก
               </button>
@@ -543,19 +616,18 @@ export const AddAccommodationModal = ({
                 form="accommodation-form"
                 type="submit"
                 disabled={submitting || uploading}
-                className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-600/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-[120px]"
               >
-                {(submitting || uploading) && (
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                {uploading || submitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin text-zinc-400" />
+                    {uploading ? "กำลังอัปโหลดรูป..." : "กำลังบันทึก..."}
+                  </span>
+                ) : editAccommodation ? (
+                  "บันทึกการเปลี่ยนแปลง"
+                ) : (
+                  "สร้างรายการที่พัก"
                 )}
-                {uploading
-                  ? `กำลังอัปโหลด... (${imageFiles.length})`
-                  : submitting
-                  ? editAccommodation ? "กำลังอัปเดต..." : "กำลังบันทึก..."
-                  : editAccommodation ? "อัปเดตข้อมูล" : "บันึกข้อมูล"}
               </button>
             </div>
           </motion.div>

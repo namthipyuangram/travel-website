@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { Sidebar } from "../../component/Admin/Sidebar"; // ✅ ใช้ Named Export ตามที่เราได้ Refactor ไว้
+import Sidebar from "../../component/Admin/Sidebar";
+import OnlineTracker from "@/component/OnlineTracker";
 
 export default async function AdminLayout({
   children,
@@ -28,19 +29,27 @@ export default async function AdminLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // ตรวจสอบ Role จาก app_metadata
-  const role = user?.app_metadata?.role as string | undefined;
+  // 1. ถ้าไม่มี User ให้เตะไปหน้า Login
+  if (!user) {
+    redirect("/sign-in");
+  }
 
-  // หากไม่ใช่ Admin ให้เตะกลับไปหน้า Dashboard อัตโนมัติ (ไม่ต้องมีจังหวะกระพริบโหลด)
-  // *ถึงแม้ Middleware จะดักไว้แล้ว แต่การดักระดับ Layout ไว้ด้วยคือ Best Practice ด้านความปลอดภัย
-  if (!user || role !== "admin") {
+  // 2. ดึง Role จากตาราง profiles ให้ตรงกับ State Machine ของระบบ
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  // 3. หากไม่ใช่ Admin ให้เตะกลับไปหน้า Dashboard อัตโนมัติ
+  if (profile?.role !== "admin") {
     redirect("/dashboard");
   }
 
   return (
     <div className="flex min-h-screen bg-slate-50 lg:flex-row flex-col">
       <Sidebar />
-      <main className="flex-1 min-w-0">{children}</main>
+      <main className="flex-1 min-w-0"><OnlineTracker />{children}</main>
     </div>
   );
 }

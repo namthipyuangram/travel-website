@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Upload, Image as ImageIcon, Loader2 } from "lucide-react";
+import { X, Upload, Image as ImageIcon, Loader2, ChevronDown, Check } from "lucide-react";
 
 interface Props {
   form: any;
@@ -24,7 +24,12 @@ export default function RestaurantModal({
 }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Custom Dropdown State
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -32,6 +37,20 @@ export default function RestaurantModal({
     return () => {
       document.body.style.overflow = "unset";
     };
+  }, []);
+
+  // Handle clicking outside of the custom dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        categoryDropdownRef.current &&
+        !categoryDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsCategoryOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const categories = [
@@ -48,23 +67,14 @@ export default function RestaurantModal({
 
   const getImageUrl = (image: any) => {
     if (!image) return "";
-
-    if (Array.isArray(image)) {
-      return image[0] || "";
-    }
-
+    if (Array.isArray(image)) return image[0] || "";
     if (typeof image === "string") {
       try {
         const parsed = JSON.parse(image);
-
-        if (Array.isArray(parsed)) {
-          return parsed[0] || "";
-        }
+        if (Array.isArray(parsed)) return parsed[0] || "";
       } catch {}
-
       return image;
     }
-
     return "";
   };
 
@@ -114,7 +124,7 @@ export default function RestaurantModal({
       if (!res.ok) throw new Error("Save failed");
 
       toast.success(
-        form.id ? "อัปเดตข้อมูลเรียบร้อย" : "เพิ่มร้านอาหารเรียบร้อย",
+        form.id ? "อัปเดตข้อมูลร้านอาหารสำเร็จ" : "เพิ่มร้านอาหารใหม่สำเร็จ",
       );
       setForm({
         id: "",
@@ -134,7 +144,6 @@ export default function RestaurantModal({
     }
   };
 
-  // Drag & Drop Handlers
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -155,63 +164,63 @@ export default function RestaurantModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-        {/* Backdrop */}
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 font-sans">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={!isSubmitting ? onClose : undefined}
-          className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+          className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm"
         />
 
-        {/* Modal Content */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0, scale: 0.96, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-          className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+          exit={{ opacity: 0, scale: 0.96, y: 15 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="relative w-full max-w-2xl bg-white rounded-xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-zinc-200/50 flex flex-col max-h-[90vh] overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              {form.id ? "แก้ไขข้อมูลร้านอาหาร" : "เพิ่มร้านอาหารใหม่"}
-            </h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
+            <div>
+              <h2 className="text-[17px] font-semibold text-zinc-900 tracking-tight">
+                {form.id ? "แก้ไขข้อมูลร้านอาหาร" : "เพิ่มร้านอาหารใหม่"}
+              </h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {form.id ? "แก้ไขและอัปเดตข้อมูลร้านอาหาร" : "เพิ่มข้อมูลร้านอาหารใหม่เข้าสู่ระบบ"}
+              </p>
+            </div>
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50"
+              className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-md transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500"
             >
-              <X size={20} strokeWidth={2.5} />
+              <X size={18} strokeWidth={2} />
             </button>
           </div>
 
-          {/* Form Body (Scrollable) */}
+          {/* Form Body */}
           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-            <form
-              id="restaurant-form"
-              onSubmit={handleSubmit}
-              className="space-y-6"
-            >
+            <form id="restaurant-form" onSubmit={handleSubmit} className="space-y-6">
+              
               {/* Image Upload Zone */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  รูปภาพร้านอาหาร
+                <label className="block text-[13px] font-medium text-zinc-700 mb-2">
+                  รูปภาพหน้าร้าน <span className="text-zinc-400 font-normal">(Thumbnail)</span>
                 </label>
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`relative flex flex-col items-center justify-center w-full min-h-[160px] p-6 transition-all border-2 border-dashed rounded-2xl cursor-pointer overflow-hidden
+                  className={`relative flex flex-col items-center justify-center w-full min-h-[180px] p-2 transition-all border border-dashed rounded-lg cursor-pointer overflow-hidden
                     ${
                       isDragging
-                        ? "border-blue-500 bg-blue-50"
+                        ? "border-zinc-500 bg-zinc-100/80"
                         : file || getImageUrl(form.image_url)
-                          ? "border-transparent bg-slate-100 p-2"
-                          : "border-slate-300 hover:border-slate-400 hover:bg-slate-50"
+                          ? "border-transparent bg-zinc-50"
+                          : "border-zinc-300 hover:border-zinc-400 bg-zinc-50/50 hover:bg-zinc-50"
                     }
                   `}
                 >
@@ -233,36 +242,21 @@ export default function RestaurantModal({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="relative w-full h-48 sm:h-64 rounded-xl overflow-hidden group"
+                        className="relative w-full h-48 sm:h-56 rounded-md overflow-hidden group border border-zinc-200/50 shadow-sm"
                       >
-                        {/* Background */}
                         <img
-                          src={
-                            file
-                              ? URL.createObjectURL(file)
-                              : getImageUrl(form.image_url)
-                          }
+                          src={file ? URL.createObjectURL(file) : getImageUrl(form.image_url)}
                           alt=""
-                          className="absolute inset-0 w-full h-full object-cover"
+                          className="absolute inset-0 w-full h-full object-cover blur-md opacity-50 scale-110"
                         />
-
-                        <div className="absolute inset-0 bg-black/20" />
-
-                        {/* Main Image */}
                         <img
-                          src={
-                            file
-                              ? URL.createObjectURL(file)
-                              : getImageUrl(form.image_url)
-                          }
+                          src={file ? URL.createObjectURL(file) : getImageUrl(form.image_url)}
                           alt="Preview"
-                          className="h-full w-full object-cover"
+                          className="relative h-full w-full object-contain"
                         />
-
-                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
-                          <span className="text-white flex items-center gap-2 font-medium bg-black/40 px-4 py-2 rounded-xl backdrop-blur-md">
-                            <Upload size={18} />
-                            เปลี่ยนรูปภาพ
+                        <div className="absolute inset-0 bg-zinc-950/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                          <span className="text-white flex items-center gap-1.5 text-xs font-medium bg-zinc-950/60 border border-white/10 px-3 py-1.5 rounded-md backdrop-blur-md">
+                            <Upload size={14} /> เปลี่ยนรูปภาพ
                           </span>
                         </div>
                       </motion.div>
@@ -271,20 +265,17 @@ export default function RestaurantModal({
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="flex flex-col items-center text-center space-y-3"
+                        className="flex flex-col items-center text-center space-y-2 py-8"
                       >
-                        <div className="p-3 bg-white shadow-sm rounded-full border border-slate-100 text-slate-400">
-                          <ImageIcon size={28} strokeWidth={1.5} />
+                        <div className="p-2.5 bg-white shadow-sm border border-zinc-200 rounded-lg text-zinc-400 mb-1">
+                          <ImageIcon size={22} strokeWidth={1.5} />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-700">
-                            คลิกเพื่ออัปโหลด{" "}
-                            <span className="font-normal text-slate-500">
-                              หรือลากไฟล์มาวาง
-                            </span>
+                          <p className="text-[13px] font-medium text-zinc-900">
+                            คลิกเพื่อเลือกไฟล์ <span className="font-normal text-zinc-500">หรือลากรูปมาวางที่นี่</span>
                           </p>
-                          <p className="text-xs text-slate-400 mt-1">
-                            รองรับ JPG, PNG (แนะนำขนาด 800x600px)
+                          <p className="text-[11px] text-zinc-400 mt-1">
+                            รองรับไฟล์ JPG, PNG, WEBP (แนะนำสัดส่วน 16:9)
                           </p>
                         </div>
                       </motion.div>
@@ -293,71 +284,104 @@ export default function RestaurantModal({
                 </div>
               </div>
 
-              {/* Grid Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Form Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
                 <div className="sm:col-span-1 space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700">
-                    ชื่อร้าน <span className="text-red-500">*</span>
+                  <label className="text-[13px] font-medium text-zinc-700">
+                    ชื่อร้านอาหาร <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="ระบุชื่อร้านอาหาร"
+                    placeholder="เช่น The Coffee Club"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
                   />
                 </div>
 
-                <div className="sm:col-span-1 space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700">
+                {/* ─── Premium Custom Dropdown ─── */}
+                <div className="sm:col-span-1 space-y-1.5" ref={categoryDropdownRef}>
+                  <label className="text-[13px] font-medium text-zinc-700">
                     หมวดหมู่
                   </label>
-                  <select
-                    value={form.category}
-                    onChange={(e) =>
-                      setForm({ ...form, category: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none cursor-pointer appearance-none"
-                  >
-                    <option value="" disabled className="text-slate-400">
-                      -- เลือกหมวดหมู่ --
-                    </option>
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                      className={`w-full pl-3 pr-3 py-2 text-sm border rounded-lg bg-white transition-all flex items-center justify-between focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 ${
+                        isCategoryOpen 
+                          ? "border-zinc-400 ring-4 ring-zinc-900/5" 
+                          : "border-zinc-200 hover:border-zinc-300"
+                      } ${form.category ? "text-zinc-900" : "text-zinc-400"}`}
+                    >
+                      <span className="truncate">{form.category || "เลือกหมวดหมู่..."}</span>
+                      <ChevronDown
+                        size={16}
+                        className={`text-zinc-400 transition-transform duration-200 ${
+                          isCategoryOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCategoryOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute z-50 w-full mt-1.5 bg-white border border-zinc-200 rounded-lg shadow-[0_12px_30px_-10px_rgba(0,0,0,0.1)] py-1 overflow-hidden"
+                        >
+                          <div className="max-h-56 overflow-y-auto custom-scrollbar">
+                            {categories.map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => {
+                                  setForm({ ...form, category: cat });
+                                  setIsCategoryOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-[13px] hover:bg-zinc-50 flex items-center justify-between transition-colors group"
+                              >
+                                <span className={form.category === cat ? "text-zinc-900 font-medium" : "text-zinc-600 group-hover:text-zinc-900"}>
+                                  {cat}
+                                </span>
+                                {form.category === cat && (
+                                  <Check size={14} className="text-zinc-900" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700">
-                    ตำแหน่งที่ตั้ง
+                  <label className="text-[13px] font-medium text-zinc-700">
+                    ตำแหน่งที่ตั้ง / พิกัด
                   </label>
                   <input
                     type="text"
-                    placeholder="เช่น อาคาร, ถนน, เขต, จังหวัด"
+                    placeholder="เช่น ชั้น G สยามพารากอน, ถ.สุขุมวิท"
                     value={form.location}
-                    onChange={(e) =>
-                      setForm({ ...form, location: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400"
+                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400"
                   />
                 </div>
 
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700">
-                    รายละเอียดเพิ่มเติม
+                  <label className="text-[13px] font-medium text-zinc-700">
+                    คำอธิบาย / รายละเอียดเพิ่มเติม
                   </label>
                   <textarea
-                    placeholder="เมนูแนะนำ, เวลาเปิด-ปิด, เบอร์ติดต่อ..."
+                    placeholder="ใส่ข้อมูลเวลาเปิด-ปิด, เมนูแนะนำ, หรือจุดเด่นของร้าน..."
                     value={form.description}
-                    onChange={(e) =>
-                      setForm({ ...form, description: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
                     rows={3}
-                    className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none placeholder:text-slate-400 resize-none"
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white focus:outline-none focus:ring-4 focus:ring-zinc-900/5 focus:border-zinc-400 transition-all placeholder:text-zinc-400 resize-none leading-relaxed"
                   />
                 </div>
               </div>
@@ -365,12 +389,12 @@ export default function RestaurantModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+          <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="px-4 py-2 text-[13px] font-medium text-zinc-600 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 hover:text-zinc-900 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               ยกเลิก
             </button>
@@ -378,17 +402,17 @@ export default function RestaurantModal({
               form="restaurant-form"
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-[120px]"
+              className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-[100px]"
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin text-zinc-400" />
                   กำลังบันทึก...
                 </span>
               ) : form.id ? (
-                "อัปเดตข้อมูล"
+                "บันทึกการเปลี่ยนแปลง"
               ) : (
-                "บันทึกข้อมูล"
+                "สร้างร้านอาหาร"
               )}
             </button>
           </div>

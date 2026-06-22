@@ -6,7 +6,7 @@ import { generalApiRateLimit } from "@/lib/rate-limit";
 
 // ─── Helper: ดึงข้อมูล User และ Role จาก Supabase ────────────────────────────
 
-export const getSessionUser = async () => {
+export const getSessionUserWithRole = async () => {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,7 +23,16 @@ export const getSessionUser = async () => {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return user;
+  if (!user) return { user: null, role: null };
+
+  // ดึง Role จากตาราง public.profiles (วิธีที่เราเลือกใช้)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  return { user, role: profile?.role ?? "user" };
 };
 
 // ─── GET /api/reviews (Public) ───────────────────────────────────────────────
@@ -66,7 +75,7 @@ export const GET = async (req: Request) => {
 
 export const POST = async (req: Request) => {
   try {
-    const user = await getSessionUser();
+    const { user } = await getSessionUserWithRole();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -130,7 +139,7 @@ export const POST = async (req: Request) => {
 
 export const PUT = async (req: Request) => {
   try {
-    const user = await getSessionUser();
+    const { user, role } = await getSessionUserWithRole();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -157,8 +166,8 @@ export const PUT = async (req: Request) => {
       return NextResponse.json({ error: "Review ID is required." }, { status: 400 });
     }
 
-    // ตรวจสอบสิทธิ์ Admin จาก app_metadata ของ Supabase โดยตรง
-    const isAdmin = user.app_metadata?.role === "admin";
+    // ตรวจสอบสิทธิ์ Admin จากตัวแปร role
+    const isAdmin = role === "admin";
 
     const updatePayload: { rating?: number; comment?: string } = {};
 
@@ -204,7 +213,7 @@ export const PUT = async (req: Request) => {
 
 export const DELETE = async (req: Request) => {
   try {
-    const user = await getSessionUser();
+    const { user, role } = await getSessionUserWithRole();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -221,8 +230,8 @@ export const DELETE = async (req: Request) => {
       return NextResponse.json({ error: "Review ID is required." }, { status: 400 });
     }
 
-    // ตรวจสอบสิทธิ์ Admin 
-    const isAdmin = user.app_metadata?.role === "admin";
+    // ตรวจสอบสิทธิ์ Admin
+    const isAdmin = role === "admin";
 
     let query = supabaseAdmin.from("reviews").delete();
 

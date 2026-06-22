@@ -7,14 +7,12 @@ import {
   type KeyboardEvent,
   type ClipboardEvent,
 } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Mail,
   Lock,
-  ArrowRight,
   Loader2,
-  Plane,
-  MapPin,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -30,7 +28,6 @@ interface AuthScreenProps {
   onSocialSignIn?: (provider: "google") => void;
 }
 
-// รูปภาพจำลองสำหรับแต่ละ state เพื่อให้ความรู้สึกแยกกันชัดเจน
 const IMAGES: Record<AuthState, string> = {
   login:
     "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop",
@@ -64,6 +61,10 @@ export const AuthScreen = ({
   defaultView = "login",
   onSocialSignIn,
 }: AuthScreenProps) => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams?.get("redirect_url") || "/dashboard";
+
   const [view, setView] = useState<AuthState>(defaultView);
   const [loading, setLoading] = useState(false);
   const [currentEmail, setCurrentEmail] = useState("");
@@ -77,14 +78,12 @@ export const AuthScreen = ({
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  // นับเวลาถอยหลังสำหรับปุ่ม "ส่งรหัสอีกครั้ง"
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  // รีเซ็ตช่อง OTP และโฟกัสช่องแรกทุกครั้งที่เข้าสู่หน้านี้
   useEffect(() => {
     if (view !== "otp") return;
     setResendCooldown(RESEND_SECONDS);
@@ -107,7 +106,6 @@ export const AuthScreen = ({
 
   const validate = (email: string, pass: string) => {
     const errors: FieldErrors = {};
-
     const emailValue = email.trim().toLowerCase();
 
     if (!emailValue) {
@@ -137,7 +135,6 @@ export const AuthScreen = ({
     }
 
     setFieldErrors(errors);
-
     return Object.keys(errors).length === 0;
   };
 
@@ -148,8 +145,6 @@ export const AuthScreen = ({
     if (!validate(email, pass)) return;
 
     setLoading(true);
-    const searchParams = new URLSearchParams(window.location.search);
-    const redirectUrl = searchParams.get("redirect_url") || "/dashboard";
     setCurrentEmail(email);
 
     try {
@@ -170,7 +165,7 @@ export const AuthScreen = ({
 
       if (result.status === "success") {
         toast.success("เข้าสู่ระบบสำเร็จ");
-        window.location.href = redirectUrl;
+        router.push(redirectUrl);
       }
     } finally {
       setLoading(false);
@@ -188,7 +183,7 @@ export const AuthScreen = ({
         otpRefs.current[0]?.focus();
       } else {
         toast.success("ยืนยันตัวตนสำเร็จ");
-        window.location.href = "/dashboard";
+        router.push(redirectUrl);
       }
     } finally {
       setLoading(false);
@@ -201,7 +196,6 @@ export const AuthScreen = ({
     setOtpDigits(Array(OTP_LENGTH).fill(""));
     otpRefs.current[0]?.focus();
     toast.success("ส่งรหัส OTP ใหม่แล้ว");
-    // TODO: ต่อกับ action ขอ OTP ใหม่จริง เช่น resendOtpAction(currentEmail)
   };
 
   const handleOtpChange = (index: number, raw: string) => {
@@ -268,21 +262,21 @@ export const AuthScreen = ({
     return score;
   })();
 
-  const strengthLabel = ["อ่อนเกินไป", "พอใช้", "ดี", "แข็งแรง"][
+  const strengthLabel = ["อ่อนเกินไป", "พอใช้", "ปลอดภัย", "รัดกุมมาก"][
     Math.max((passwordStrength ?? 1) - 1, 0)
   ];
   const strengthColor =
     passwordStrength && passwordStrength <= 1
-      ? "bg-red-400"
+      ? "bg-red-500"
       : passwordStrength === 2
-        ? "bg-amber-400"
+        ? "bg-amber-500"
         : "bg-emerald-500";
 
   return (
     <div className="flex min-h-screen flex-col bg-white font-sans text-zinc-900 lg:flex-row">
-      {/* Desktop: full storytelling panel */}
+      {/* Desktop Panel */}
       <div className="relative hidden w-1/2 overflow-hidden bg-zinc-900 lg:block">
-        <AnimatePresence>
+        <AnimatePresence mode="popLayout">
           <motion.img
             key={view}
             initial={{ opacity: 0, scale: 1.05 }}
@@ -317,9 +311,9 @@ export const AuthScreen = ({
         </div>
       </div>
 
-      {/* Mobile: condensed hero so branding isn't lost on small screens */}
+      {/* Mobile Header */}
       <div className="relative h-36 w-full overflow-hidden bg-zinc-900 lg:hidden">
-        <AnimatePresence>
+        <AnimatePresence mode="popLayout">
           <motion.img
             key={view}
             initial={{ opacity: 0 }}
@@ -359,10 +353,9 @@ export const AuthScreen = ({
         </div>
       </div>
 
-      {/* Form area */}
+      {/* Form Panel */}
       <div className="flex w-full flex-1 flex-col justify-center px-6 py-10 sm:px-16 lg:w-1/2 lg:py-0 xl:px-32">
-        <div className="mx-auto w-full max-w-md">
-          {/* Brand mark — renders reliably without depending on an external image asset */}
+        <motion.div layout className="mx-auto w-full max-w-md">
           <div className="mb-10 hidden items-center gap-3 lg:mb-12 lg:flex">
             <Image
               src="/images/logo-travel.png"
@@ -372,7 +365,6 @@ export const AuthScreen = ({
               className="rounded-xl shadow-sm"
               priority
             />
-
             <span className="text-xl font-bold tracking-tight">
               เที่ยวตามงบโคราช
             </span>
@@ -419,7 +411,7 @@ export const AuthScreen = ({
                     <label className="mb-2 block text-sm font-medium text-zinc-700">
                       รหัสความปลอดภัย
                     </label>
-                    <div className="flex justify-between gap-2">
+                    <div className="flex justify-between gap-1.5 sm:gap-2">
                       {otpDigits.map((digit, i) => (
                         <input
                           key={i}
@@ -436,20 +428,16 @@ export const AuthScreen = ({
                           onChange={(e) => handleOtpChange(i, e.target.value)}
                           onKeyDown={(e) => handleOtpKeyDown(i, e)}
                           onPaste={handleOtpPaste}
-                          aria-label={`หลักที่ ${i + 1} ของรหัสยืนยัน 6 หลัก`}
-                          suppressHydrationWarning
-                          className="h-14 w-11 rounded-xl border border-zinc-200 text-center text-xl font-mono outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-zinc-900 disabled:opacity-60 sm:w-14"
+                          aria-label={`หลักที่ ${i + 1}`}
+                          className="aspect-square w-full max-w-[3.25rem] rounded-xl border border-zinc-200 text-center text-xl font-mono font-semibold outline-none transition-all focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/20 disabled:opacity-60"
                         />
                       ))}
                     </div>
                   </div>
 
                   <button
-                    disabled={
-                      loading || otpDigits.join("").length !== OTP_LENGTH
-                    }
+                    disabled={loading || otpDigits.join("").length !== OTP_LENGTH}
                     type="submit"
-                    suppressHydrationWarning
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-4 font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading ? (
@@ -463,7 +451,6 @@ export const AuthScreen = ({
                     <button
                       type="button"
                       onClick={() => switchView("login")}
-                      suppressHydrationWarning
                       className="text-zinc-500 transition-colors hover:text-zinc-900"
                     >
                       ใช้อีเมลบัญชีอื่น
@@ -472,7 +459,6 @@ export const AuthScreen = ({
                       type="button"
                       onClick={handleResend}
                       disabled={resendCooldown > 0}
-                      suppressHydrationWarning
                       className={
                         resendCooldown > 0
                           ? "cursor-not-allowed text-zinc-400"
@@ -480,7 +466,7 @@ export const AuthScreen = ({
                       }
                     >
                       {resendCooldown > 0
-                        ? `ส่งรหัสอีกครั้งใน ${resendCooldown}s`
+                        ? <span suppressHydrationWarning>ส่งรหัสอีกครั้งใน {resendCooldown}s</span>
                         : "ส่งรหัสอีกครั้ง"}
                     </button>
                   </div>
@@ -512,7 +498,6 @@ export const AuthScreen = ({
                           autoCorrect="off"
                           inputMode="email"
                           disabled={loading}
-                          suppressHydrationWarning
                           placeholder="อีเมลของคุณ"
                           aria-invalid={!!fieldErrors.email}
                           aria-describedby={
@@ -522,17 +507,11 @@ export const AuthScreen = ({
                             const value = e.target.value
                               .replace(/[ก-๙]/g, "")
                               .trimStart();
-
                             e.target.value = value;
-
-                            if (fieldErrors.email) {
-                              clearFieldError("email");
-                            }
+                            if (fieldErrors.email) clearFieldError("email");
                           }}
                           onPaste={(e) => {
-                            const pasted = e.clipboardData.getData("text");
-
-                            if (/[ก-๙]/.test(pasted)) {
+                            if (/[ก-๙]/.test(e.clipboardData.getData("text"))) {
                               e.preventDefault();
                             }
                           }}
@@ -589,11 +568,8 @@ export const AuthScreen = ({
                           autoCapitalize="none"
                           autoCorrect="off"
                           autoComplete={
-                            view === "login"
-                              ? "current-password"
-                              : "new-password"
+                            view === "login" ? "current-password" : "new-password"
                           }
-                          suppressHydrationWarning
                           placeholder={
                             view === "signup"
                               ? "อย่างน้อย 8 ตัวอักษร"
@@ -604,28 +580,13 @@ export const AuthScreen = ({
                             fieldErrors.password ? "password-error" : undefined
                           }
                           onChange={(e) => {
-                            let value = e.target.value;
-
-                            // ตัดภาษาไทย
-                            value = value.replace(/[ก-๙]/g, "");
-
-                            // จำกัดความยาว
-                            value = value.slice(0, 128);
-
+                            let value = e.target.value.replace(/[ก-๙]/g, "").slice(0, 128);
                             setPassword(value);
-
-                            if (!value) {
-                              setShowPassword(false);
-                            }
-
-                            if (fieldErrors.password) {
-                              clearFieldError("password");
-                            }
+                            if (!value) setShowPassword(false);
+                            if (fieldErrors.password) clearFieldError("password");
                           }}
                           onPaste={(e) => {
-                            const pasted = e.clipboardData.getData("text");
-
-                            if (/[ก-๙]/.test(pasted)) {
+                            if (/[ก-๙]/.test(e.clipboardData.getData("text"))) {
                               e.preventDefault();
                             }
                           }}
@@ -639,7 +600,6 @@ export const AuthScreen = ({
                         <button
                           type="button"
                           onClick={() => setShowPassword((prev) => !prev)}
-                          suppressHydrationWarning
                           className={`absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 transition-all duration-200 hover:text-zinc-600 ${
                             password.length > 0
                               ? "pointer-events-auto scale-100 opacity-100"
@@ -667,22 +627,22 @@ export const AuthScreen = ({
                       )}
 
                       {passwordStrength !== null && !fieldErrors.password && (
-                        <div className="mt-2">
-                          <div className="flex gap-1">
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <div className="flex h-1.5 flex-1 gap-1">
                             {[0, 1, 2, 3].map((i) => (
-                              <span
+                              <div
                                 key={i}
-                                className={`h-1 flex-1 rounded-full transition-colors ${
+                                className={`h-full flex-1 rounded-full transition-all duration-300 ${
                                   i < passwordStrength
                                     ? strengthColor
-                                    : "bg-zinc-150"
+                                    : "bg-zinc-100"
                                 }`}
                               />
                             ))}
                           </div>
-                          <p className="mt-1 text-xs text-zinc-400">
-                            ความปลอดภัย: {strengthLabel}
-                          </p>
+                          <span className="text-right text-xs font-medium text-zinc-400">
+                            {strengthLabel}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -694,7 +654,6 @@ export const AuthScreen = ({
                             type="checkbox"
                             checked={agreed}
                             disabled={loading}
-                            suppressHydrationWarning
                             onChange={(e) => {
                               setAgreed(e.target.checked);
                               clearFieldError("agreed");
@@ -729,8 +688,7 @@ export const AuthScreen = ({
                     <button
                       disabled={loading}
                       type="submit"
-                      suppressHydrationWarning
-                      className="group flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-4 mt-2 font-medium text-white shadow-lg shadow-zinc-900/20 transition-all duration-200 hover:bg-zinc-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="group mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-4 font-medium text-white shadow-lg shadow-zinc-900/20 transition-all duration-200 hover:bg-zinc-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {loading ? (
                         <>
@@ -742,11 +700,9 @@ export const AuthScreen = ({
                           </span>
                         </>
                       ) : (
-                        <>
-                          <span>
-                            {view === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชี"}
-                          </span>
-                        </>
+                        <span>
+                          {view === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชี"}
+                        </span>
                       )}
                     </button>
                   </form>
@@ -762,7 +718,6 @@ export const AuthScreen = ({
                   <button
                     type="button"
                     disabled={loading}
-                    suppressHydrationWarning
                     onClick={async () => {
                       const { createSupabaseClient } =
                         await import("@/lib/supabaseClient");
@@ -811,7 +766,6 @@ export const AuthScreen = ({
                         onClick={() =>
                           switchView(view === "login" ? "signup" : "login")
                         }
-                        suppressHydrationWarning
                         className="ml-2 font-semibold text-zinc-900 underline-offset-4 hover:underline"
                       >
                         {view === "login" ? "สร้างบัญชี" : "เข้าสู่ระบบ"}
@@ -822,7 +776,7 @@ export const AuthScreen = ({
               )}
             </motion.div>
           </AnimatePresence>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
