@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { supabaseClient } from "@/lib/supabaseClient";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -13,7 +13,6 @@ import {
   Filter,
   MapPin,
   X,
-  User,
   Image as ImageIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -50,40 +49,59 @@ interface GroupedLocation {
 }
 
 export default function AdminReviewsPage() {
-  const { user, isLoaded } = useUser();
   const router = useRouter();
 
-  const [groupedLocations, setGroupedLocations] = useState<GroupedLocation[]>(
-    [],
+  // ─── Supabase Auth State ───────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
+  
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  // ─── Data State ────────────────────────────────────────────────────────────
+  const [groupedLocations, setGroupedLocations] = useState<GroupedLocation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters & Pagination
+  // ─── Filters & Pagination ──────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
   type CategoryType = "ทั้งหมด" | "ที่พัก" | "ร้านอาหาร" | "สถานที่ท่องเที่ยว";
   const [activeType, setActiveType] = useState<CategoryType>("ทั้งหมด");
   const [page, setPage] = useState(1);
   const itemsPerPage = 8;
 
-  // Modals & Dialogs
-  const [selectedLocation, setSelectedLocation] =
-    useState<GroupedLocation | null>(null);
+  // ─── Modals & Dialogs ──────────────────────────────────────────────────────
+  const [selectedLocation, setSelectedLocation] = useState<GroupedLocation | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Authentication Check
+  // ================= 1. ตรวจสอบสถานะ Auth =================
   useEffect(() => {
-    if (isLoaded) {
-      const role = user?.publicMetadata?.role as string | undefined;
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setAuthLoaded(true);
+    };
+    fetchSession();
+  }, [supabase.auth]);
+
+  // ================= 2. ดักจับสิทธิ์ Admin =================
+  useEffect(() => {
+    if (authLoaded) {
+      const role = user?.app_metadata?.role as string | undefined;
       if (role !== "admin") {
         router.push("/dashboard");
       }
     }
-  }, [isLoaded, user, router]);
+  }, [authLoaded, user, router]);
 
+  // ================= 3. ดึงข้อมูล =================
   useEffect(() => {
-    fetchAndGroupReviews();
-  }, []);
+    if (authLoaded && user?.app_metadata?.role === "admin") {
+      fetchAndGroupReviews();
+    }
+  }, [authLoaded, user]);
 
   useEffect(() => {
     setPage(1);
@@ -92,23 +110,13 @@ export default function AdminReviewsPage() {
   const getFirstImage = (item: any): string | null => {
     try {
       const raw = item.images || item.image_url;
-
       if (!raw) return null;
-
-      if (Array.isArray(raw)) {
-        return raw[0] || null;
-      }
-
+      if (Array.isArray(raw)) return raw[0] || null;
       if (typeof raw === "string") {
         const parsed = JSON.parse(raw);
-
-        if (Array.isArray(parsed)) {
-          return parsed[0] || null;
-        }
-
+        if (Array.isArray(parsed)) return parsed[0] || null;
         return raw;
       }
-
       return null;
     } catch {
       return null;
@@ -119,25 +127,17 @@ export default function AdminReviewsPage() {
     try {
       setLoading(true);
 
+      // ใช้ตัวแปร supabase จาก Browser Client แทน supabaseClient เพื่อให้แนบ Token ป้องกันปัญหา RLS
       const [
         { data: reviewsData },
         { data: accData },
         { data: restData },
         { data: destData },
       ] = await Promise.all([
-        supabaseClient
-          .from("reviews")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabaseClient
-          .from("accommodations")
-          .select("id, name, address ,images"),
-        supabaseClient
-          .from("restaurants")
-          .select("id, name, location ,image_url"),
-        supabaseClient
-          .from("destinations")
-          .select("id, name, category ,image_url"),
+        supabase.from("reviews").select("*").order("created_at", { ascending: false }),
+        supabase.from("accommodations").select("id, name, address, images"),
+        supabase.from("restaurants").select("id, name, location, image_url"),
+        supabase.from("destinations").select("id, name, category, image_url"),
       ]);
 
       if (!reviewsData) throw new Error("ไม่สามารถดึงข้อมูลรีวิวได้");
@@ -153,11 +153,7 @@ export default function AdminReviewsPage() {
 
         if (r.accommodation_id) {
           target_id = r.accommodation_id;
-
-          const target = accData?.find(
-            (a) => String(a.id) === String(r.accommodation_id),
-          );
-
+          const target = accData?.find((a) => String(a.id) === String(r.accommodation_id));
           if (target) {
             target_name = target.name;
             target_location = target.address;
@@ -166,11 +162,7 @@ export default function AdminReviewsPage() {
           }
         } else if (r.restaurant_id) {
           target_id = String(r.restaurant_id);
-
-          const target = restData?.find(
-            (a) => String(a.id) === String(r.restaurant_id),
-          );
-
+          const target = restData?.find((a) => String(a.id) === String(r.restaurant_id));
           if (target) {
             target_name = target.name;
             target_location = target.location;
@@ -179,11 +171,7 @@ export default function AdminReviewsPage() {
           }
         } else if (r.destination_id) {
           target_id = String(r.destination_id);
-
-          const target = destData?.find(
-            (a) => String(a.id) === String(r.destination_id),
-          );
-
+          const target = destData?.find((a) => String(a.id) === String(r.destination_id));
           if (target) {
             target_name = target.name;
             target_location = target.category || "สถานที่ท่องเที่ยว";
@@ -217,10 +205,7 @@ export default function AdminReviewsPage() {
 
       const finalGroups = Array.from(groupedMap.values()).map((g) => {
         const sum = g.reviews.reduce((acc, curr) => acc + curr.rating, 0);
-        g.average_rating =
-          g.reviews.length > 0
-            ? Number((sum / g.reviews.length).toFixed(1))
-            : 0;
+        g.average_rating = g.reviews.length > 0 ? Number((sum / g.reviews.length).toFixed(1)) : 0;
         return g;
       });
 
@@ -249,23 +234,15 @@ export default function AdminReviewsPage() {
 
       toast.success("ลบรีวิวเรียบร้อยแล้ว");
 
-      // ส่วน update state เดิมใช้ได้เลย
       setGroupedLocations((prev) => {
         return prev
           .map((loc) => {
-            const newReviews = loc.reviews.filter(
-              (r) => r.id !== deleteConfirm,
-            );
+            const newReviews = loc.reviews.filter((r) => r.id !== deleteConfirm);
             if (newReviews.length === loc.reviews.length) return loc;
 
             const newAvg =
               newReviews.length > 0
-                ? Number(
-                    (
-                      newReviews.reduce((sum, r) => sum + r.rating, 0) /
-                      newReviews.length
-                    ).toFixed(1),
-                  )
+                ? Number((newReviews.reduce((sum, r) => sum + r.rating, 0) / newReviews.length).toFixed(1))
                 : 0;
             return { ...loc, reviews: newReviews, average_rating: newAvg };
           })
@@ -273,18 +250,11 @@ export default function AdminReviewsPage() {
       });
 
       if (selectedLocation) {
-        const updatedReviews = selectedLocation.reviews.filter(
-          (r) => r.id !== deleteConfirm,
-        );
+        const updatedReviews = selectedLocation.reviews.filter((r) => r.id !== deleteConfirm);
         if (updatedReviews.length === 0) {
           setSelectedLocation(null);
         } else {
-          const newAvg = Number(
-            (
-              updatedReviews.reduce((sum, r) => sum + r.rating, 0) /
-              updatedReviews.length
-            ).toFixed(1),
-          );
+          const newAvg = Number((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1));
           setSelectedLocation({
             ...selectedLocation,
             reviews: updatedReviews,
@@ -302,21 +272,15 @@ export default function AdminReviewsPage() {
 
   const filteredLocations = useMemo(() => {
     return groupedLocations.filter((loc) => {
-      const matchSearch = loc.target_name
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      const matchType =
-        activeType === "ทั้งหมด" || loc.target_type === activeType;
+      const matchSearch = loc.target_name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchType = activeType === "ทั้งหมด" || loc.target_type === activeType;
       return matchSearch && matchType;
     });
   }, [groupedLocations, searchQuery, activeType]);
 
   const totalPages = Math.ceil(filteredLocations.length / itemsPerPage);
   const displayedLocations = useMemo(() => {
-    return filteredLocations.slice(
-      (page - 1) * itemsPerPage,
-      page * itemsPerPage,
-    );
+    return filteredLocations.slice((page - 1) * itemsPerPage, page * itemsPerPage);
   }, [filteredLocations, page]);
 
   // --- Render Helpers ---
@@ -341,30 +305,20 @@ export default function AdminReviewsPage() {
     });
   };
 
-  if (!isLoaded || loading) {
+  if (!authLoaded || loading) {
     return (
       <main className="min-h-screen bg-[#F8FAFC] flex justify-center items-center">
-        <svg
-          className="animate-spin h-10 w-10 text-indigo-600"
-          viewBox="0 0 24 24"
-          fill="none"
-        >
-          <circle
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-            className="opacity-25"
-          ></circle>
-          <path
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            className="opacity-75"
-          ></path>
+        <svg className="animate-spin h-10 w-10 text-indigo-600" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
+          <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75"></path>
         </svg>
       </main>
     );
+  }
+
+  // ป้องกันการ Flash ของ UI ระหว่างรอ Redirect หากไม่ใช่ Admin
+  if (!user || user.app_metadata?.role !== "admin") {
+    return null;
   }
 
   return (
@@ -429,7 +383,6 @@ export default function AdminReviewsPage() {
         </motion.div>
 
         {/* 📱 IG Style Feed Cards */}
-        {/* ✅ เปลี่ยนจาก min-h-[400px] เป็น min-h-100 */}
         <motion.div layout className="min-h-100">
           <AnimatePresence mode="popLayout">
             {filteredLocations.length === 0 ? (
@@ -437,7 +390,7 @@ export default function AdminReviewsPage() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center"
+                className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center min-h-80"
               >
                 <div className="bg-slate-50 p-4 rounded-full mb-4 text-slate-400">
                   <MessageSquare size={32} />
@@ -590,6 +543,7 @@ export default function AdminReviewsPage() {
                           <img
                             src={selectedLocation.target_image}
                             className="w-full h-full object-cover"
+                            alt="avatar"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
@@ -599,7 +553,7 @@ export default function AdminReviewsPage() {
                       </div>
                       <div>
                         <h2
-                          className="font-bold text-slate-900 leading-none truncate max-w-[200px]"
+                          className="font-bold text-slate-900 leading-none truncate max-w-50"
                           title={selectedLocation.target_name}
                         >
                           {selectedLocation.target_name}
@@ -641,7 +595,7 @@ export default function AdminReviewsPage() {
                                   className="font-semibold text-sm text-slate-900 truncate"
                                   title={r.created_by}
                                 >
-                                  User ID: {r.created_by.slice(0, 8)}...
+                                  User: {r.created_by.slice(0, 8)}...
                                 </span>
                                 <div className="flex gap-0.5">
                                   {renderStars(r.rating, 10)}

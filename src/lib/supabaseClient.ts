@@ -1,11 +1,14 @@
-// src/lib/supabaseClient.ts (for client-side use)
-import { createClient } from "@supabase/supabase-js";
+// src/lib/supabaseClient.ts
+import { createBrowserClient } from "@supabase/ssr";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export const createSupabaseClient = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!url || !anon) {
-  throw new Error("Missing Supabase env vars (CLIENT)");
-}
+  if (!url || !anon) {
+    throw new Error("Missing Supabase env vars (CLIENT)");
+  }
 
-export const supabaseClient = createClient(url, anon);
+  // createBrowserClient จะจัดการซิงก์ Session ลง Cookie ให้โดยอัตโนมัติ
+  return createBrowserClient(url, anon);
+};

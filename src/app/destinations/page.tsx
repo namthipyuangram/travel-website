@@ -1,5 +1,5 @@
 // src/app/destinations/page.tsx
-import Navbar from "@/component/User/Navbar";
+import {Navbar} from "@/component/User/Navbar";
 import DestinationList from "../../component/User/DestinationList";
 import Link from "next/link";
 
@@ -39,7 +39,7 @@ export default function DestinationsPage() {
           <ol className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-gray-500 font-medium">
             <li>
               <Link 
-                href="/" 
+                href="/dashboard" 
                 className="hover:text-emerald-600 transition-colors flex items-center gap-1.5 focus:outline-none focus:text-emerald-600"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

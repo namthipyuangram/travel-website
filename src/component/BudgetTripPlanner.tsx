@@ -1,14 +1,16 @@
 "use client";
-
-import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles, MapPin, Utensils, BedDouble,
   ChevronRight, ChevronLeft, RefreshCcw,
-  CheckCircle2, Luggage, X, Trash2
+  CheckCircle2, Luggage, X, Trash2,
+  AlertTriangle, Wallet, BadgeCheck,
+  LogIn, Lock
 } from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type TripMode = "total" | "custom";
 
@@ -21,15 +23,749 @@ interface TripItem {
   category?: string;
 }
 
-// เก็บข้อมูลครบเพื่อแสดงใน Drawer ได้เลย
 interface SelectedItem {
   item: TripItem;
   type: string;
 }
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface BudgetTripPlannerProps {
+  isLoggedIn?: boolean;
+}
+
+// ─── Budget Validation ────────────────────────────────────────────────────────
+
+function useBudgetValid(
+  mode: TripMode,
+  totalBudget: string,
+  customBudgets: { accommodation: string; food: string; destination: string }
+) {
+  if (mode === "total") {
+    const n = Number(totalBudget);
+    return { valid: n > 0, hint: "กรุณาระบุงบประมาณรวม" };
+  }
+  const vals = Object.values(customBudgets).map(Number);
+  const allFilled = vals.every((v) => v > 0);
+  if (allFilled) return { valid: true, hint: "" };
+  const missing: string[] = [];
+  if (!Number(customBudgets.accommodation)) missing.push("ที่พัก");
+  if (!Number(customBudgets.food)) missing.push("ร้านอาหาร");
+  if (!Number(customBudgets.destination)) missing.push("ที่เที่ยว");
+  return { valid: false, hint: `กรุณาระบุงบ: ${missing.join(", ")}` };
+}
+
+// ─── Login Prompt Modal ───────────────────────────────────────────────────────
+
+function LoginPromptModal({
+  onClose,
+  onLogin,
+}: {
+  onClose: () => void;
+  onLogin: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ scale: 0.88, y: 20, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.88, y: 20, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 28 }}
+        className="relative z-10 bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full text-center"
+      >
+        {/* Close */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+        >
+          <X className="w-4 h-4 text-neutral-500" />
+        </button>
+
+        {/* Icon */}
+        <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-5">
+          <Lock className="w-7 h-7 text-blue-500" />
+        </div>
+
+        <h3 className="text-xl font-bold text-neutral-900 mb-2">
+          ล็อกอินเพื่อบันทึกทริป
+        </h3>
+        <p className="text-neutral-500 text-sm mb-6 leading-relaxed">
+          คุณสามารถค้นหาและเลือกรายการได้ฟรี
+          แต่ต้องล็อกอินก่อนถึงจะบันทึกและเรียกดูทริปของตัวเองได้
+        </p>
+
+        {/* Perks */}
+        <div className="bg-neutral-50 rounded-2xl p-4 mb-6 text-left space-y-2.5">
+          {[
+            "บันทึกทริปและดูย้อนหลังได้ตลอด",
+            "จัดการรายการโปรดในที่เดียว",
+            "แชร์ทริปให้เพื่อนได้",
+          ].map((text) => (
+            <div key={text} className="flex items-center gap-2.5 text-sm text-neutral-700">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              {text}
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={onLogin}
+          className="w-full bg-black text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all mb-3"
+        >
+          <LogIn className="w-4.5 h-4.5" />
+          ไปล็อกอิน
+        </button>
+        <button
+          onClick={onClose}
+          className="w-full text-neutral-500 text-sm py-2 hover:text-neutral-800 transition-colors"
+        >
+          ค้นหาต่อโดยไม่ล็อกอิน
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Budget Bar ───────────────────────────────────────────────────────────────
+
+function BudgetBar({
+  spent,
+  total,
+  onOpenSummary,
+  count,
+}: {
+  spent: number;
+  total: number;
+  onOpenSummary: () => void;
+  count: number;
+}) {
+  const pct = total > 0 ? Math.min((spent / total) * 100, 100) : 0;
+  const over = spent > total && total > 0;
+  const remaining = total - spent;
+
+  const barColor = over
+    ? "bg-red-500"
+    : pct > 80
+    ? "bg-amber-400"
+    : "bg-emerald-500";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="sticky top-4 z-30 mb-8"
+    >
+      <div
+        className={`rounded-2xl px-5 py-4 shadow-xl border backdrop-blur-md ${
+          over
+            ? "bg-red-50/95 border-red-200"
+            : "bg-white/95 border-neutral-200/60"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Wallet className={`w-4 h-4 ${over ? "text-red-500" : "text-neutral-500"}`} />
+            <span className="text-sm font-semibold text-neutral-700">
+              งบประมาณของคุณ
+            </span>
+          </div>
+          <button
+            onClick={onOpenSummary}
+            disabled={count === 0}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${
+              count > 0
+                ? "bg-black text-white hover:bg-neutral-800 active:scale-95"
+                : "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            }`}
+          >
+            <Luggage className="w-3.5 h-3.5" />
+            ดูสรุปทริป
+            {count > 0 && (
+              <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {count}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="h-2 bg-neutral-100 rounded-full overflow-hidden mb-2.5">
+          <motion.div
+            className={`h-full rounded-full ${barColor} transition-colors duration-300`}
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ type: "spring", stiffness: 200, damping: 25 }}
+          />
+        </div>
+
+        <div className="flex justify-between items-center text-xs">
+          <span className={over ? "text-red-600 font-bold" : "text-neutral-500"}>
+            ใช้ไป{" "}
+            <span className="font-bold text-sm">฿{spent.toLocaleString()}</span>
+          </span>
+          {total > 0 && (
+            <span
+              className={`font-semibold ${
+                over
+                  ? "text-red-600"
+                  : remaining < total * 0.2
+                  ? "text-amber-600"
+                  : "text-emerald-600"
+              }`}
+            >
+              {over
+                ? `เกินงบ ฿${(spent - total).toLocaleString()}`
+                : `เหลือ ฿${remaining.toLocaleString()}`}
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Over-budget Modal ────────────────────────────────────────────────────────
+
+function OverBudgetModal({
+  item,
+  currentSpent,
+  budget,
+  onClose,
+}: {
+  item: TripItem | null;
+  currentSpent: number;
+  budget: number;
+  onClose: () => void;
+}) {
+  if (!item) return null;
+  const over = currentSpent + item.min_price - budget;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ scale: 0.88, y: 20, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.88, y: 20, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 28 }}
+        className="relative z-10 bg-white rounded-3xl p-8 shadow-2xl max-w-sm w-full text-center"
+      >
+        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-5">
+          <AlertTriangle className="w-8 h-8 text-red-500" />
+        </div>
+        <h3 className="text-xl font-bold text-neutral-900 mb-2">
+          งบประมาณไม่เพียงพอ
+        </h3>
+        <p className="text-neutral-500 text-sm mb-5 leading-relaxed">
+          การเพิ่ม{" "}
+          <span className="font-semibold text-neutral-800">{item.name}</span>{" "}
+          จะทำให้งบเกินไป{" "}
+          <span className="text-red-600 font-bold">฿{over.toLocaleString()}</span>
+        </p>
+
+        <div className="bg-neutral-50 rounded-2xl p-4 mb-6 text-left space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-neutral-500">งบรวม</span>
+            <span className="font-semibold">฿{budget.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-neutral-500">ใช้ไปแล้ว</span>
+            <span className="font-semibold text-amber-600">
+              ฿{currentSpent.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-px bg-neutral-200" />
+          <div className="flex justify-between text-sm">
+            <span className="text-neutral-500">เหลือ</span>
+            <span className="font-semibold text-neutral-700">
+              ฿{(budget - currentSpent).toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-neutral-500">ราคารายการนี้</span>
+            <span className="font-bold text-red-600">
+              +฿{item.min_price.toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full bg-neutral-900 text-white py-3.5 rounded-xl font-semibold hover:bg-neutral-800 active:scale-[0.98] transition-all"
+        >
+          เข้าใจแล้ว
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Trip Summary Modal ───────────────────────────────────────────────────────
+
+// Config for each category section
+const CATEGORY_CONFIG = {
+  destination: {
+    label: "สถานที่ท่องเที่ยว",
+    icon: MapPin,
+    accent: "text-blue-500",
+    badgeBg: "bg-blue-50",
+    badgeText: "text-blue-700",
+    headerBg: "bg-blue-50/60",
+    bar: "bg-blue-400",
+  },
+  restaurant: {
+    label: "ร้านอาหาร",
+    icon: Utensils,
+    accent: "text-orange-500",
+    badgeBg: "bg-orange-50",
+    badgeText: "text-orange-700",
+    headerBg: "bg-orange-50/60",
+    bar: "bg-orange-400",
+  },
+  accommodation: {
+    label: "ที่พัก",
+    icon: BedDouble,
+    accent: "text-purple-500",
+    badgeBg: "bg-purple-50",
+    badgeText: "text-purple-700",
+    headerBg: "bg-purple-50/60",
+    bar: "bg-purple-400",
+  },
+} as const;
+
+// A single item card inside the modal
+function SummaryItemCard({
+  item,
+  type,
+  onRemove,
+  getImageUrl,
+}: {
+  item: TripItem;
+  type: string;
+  onRemove: () => void;
+  getImageUrl: (item: TripItem) => string;
+}) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92, height: 0, marginBottom: 0 }}
+      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      className="group relative bg-white rounded-2xl border border-neutral-100 overflow-hidden hover:border-neutral-200 hover:shadow-sm transition-all"
+    >
+      {/* Image strip */}
+      <div className="relative h-28 w-full overflow-hidden bg-neutral-100">
+        <img
+          src={getImageUrl(item)}
+          alt={item.name}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        {/* gradient overlay for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        {/* price chip on image */}
+        <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-neutral-900 shadow-sm">
+          ฿{item.min_price.toLocaleString()}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="px-3.5 py-3">
+        <h4 className="text-sm font-semibold text-neutral-900 leading-snug line-clamp-2 pr-7">
+          {item.name}
+        </h4>
+        {item.category && (
+          <p className="text-[11px] text-neutral-400 mt-0.5 uppercase tracking-wider">
+            {item.category}
+          </p>
+        )}
+      </div>
+
+      {/* Remove button — top-right corner */}
+      <button
+        onClick={onRemove}
+        className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all shadow-sm"
+        aria-label="ลบรายการนี้"
+      >
+        <X className="w-3.5 h-3.5 text-neutral-500 hover:text-red-500 transition-colors" />
+      </button>
+    </motion.div>
+  );
+}
+
+// One grouped section per category
+function CategorySection({
+  categoryKey,
+  items,
+  onRemove,
+  getImageUrl,
+}: {
+  categoryKey: string;
+  items: SelectedItem[];
+  onRemove: (id: string | number, type: string) => void;
+  getImageUrl: (item: TripItem) => string;
+}) {
+  const cfg = CATEGORY_CONFIG[categoryKey as keyof typeof CATEGORY_CONFIG];
+  if (!cfg || items.length === 0) return null;
+  const Icon = cfg.icon;
+  const subtotal = items.reduce((s, { item }) => s + item.min_price, 0);
+
+  return (
+    <div className="mb-6 last:mb-0">
+      {/* Section header */}
+      <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl mb-3 ${cfg.headerBg}`}>
+        <div className="flex items-center gap-2">
+          <Icon className={`w-4 h-4 ${cfg.accent}`} />
+          <span className="text-sm font-semibold text-neutral-800">{cfg.label}</span>
+          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${cfg.badgeBg} ${cfg.badgeText}`}>
+            {items.length}
+          </span>
+        </div>
+        <span className="text-sm font-bold text-neutral-700">
+          ฿{subtotal.toLocaleString()}
+        </span>
+      </div>
+
+      {/* Cards grid — 2 columns */}
+      <div className="grid grid-cols-2 gap-3">
+        <AnimatePresence mode="popLayout">
+          {items.map(({ item, type }) => (
+            <SummaryItemCard
+              key={`${type}-${item.id}`}
+              item={item}
+              type={type}
+              onRemove={() => onRemove(item.id, type)}
+              getImageUrl={getImageUrl}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+export function TripSummaryModal({
+  items,
+  totalBudget,
+  isLoggedIn,
+  onClose,
+  onSave,
+  onLoginRequired,
+  isLoading,
+  onRemove,
+  getImageUrl,
+}: {
+  items: SelectedItem[];
+  totalBudget: number;
+  isLoggedIn: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  onLoginRequired: () => void;
+  isLoading: boolean;
+  onRemove: (id: string | number, type: string) => void;
+  getImageUrl: (item: TripItem) => string;
+}) {
+  const totalPrice = items.reduce((s, { item }) => s + item.min_price, 0);
+  const remaining = totalBudget - totalPrice;
+  const isOver = remaining < 0;
+
+  // 1. Group items with Meta for Stacked Progress Bar
+  const grouped = (["destination", "restaurant", "accommodation"] as const).map(
+    (key) => {
+      const catItems = items.filter((i) => i.type === key);
+      const spend = catItems.reduce((s, { item }) => s + item.min_price, 0);
+      return { key, items: catItems, spend };
+    }
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  // 2. Map color theme for each category (Fintech style)
+  const CAT_THEME: Record<string, { label: string; dot: string; barBg: string; pillBg: string; text: string }> = {
+    destination: { label: "ที่เที่ยว", dot: "bg-sky-500", barBg: "bg-sky-500", pillBg: "bg-sky-50/80 border-sky-100", text: "text-sky-950" },
+    restaurant: { label: "ร้านอาหาร", dot: "bg-amber-500", barBg: "bg-amber-500", pillBg: "bg-amber-50/80 border-amber-100", text: "text-amber-950" },
+    accommodation: { label: "ที่พัก", dot: "bg-purple-500", barBg: "bg-purple-500", pillBg: "bg-purple-50/80 border-purple-100", text: "text-purple-950" },
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6"
+    >
+      {/* Backdrop */}
+      <motion.div
+        className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Modal panel */}
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        initial={{ y: "100%", opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: "100%", opacity: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 35 }}
+        className="relative z-10 bg-white w-full sm:max-w-2xl rounded-t-[2.5rem] sm:rounded-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.15)] flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden border border-neutral-100"
+      >
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-12 h-1.5 bg-neutral-200 rounded-full" />
+        </div>
+
+        {/* ── 1. Top Header ──────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 shrink-0">
+          <div>
+            <h2 className="text-xl font-extrabold text-neutral-900 tracking-tight flex items-center gap-2.5">
+              สรุปทริปของคุณ
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600">
+                {items.length} รายการ
+              </span>
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500 flex items-center justify-center transition-colors shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* ── 2. Fintech Budget Card (The Hero) ───────────────────── */}
+        {totalBudget > 0 && (
+          <div className="px-6 mb-2 shrink-0">
+            <div className={`p-4 rounded-2xl border transition-all ${
+              isOver 
+                ? "bg-rose-50/40 border-rose-200" 
+                : "bg-neutral-50/80 border-neutral-200/70"
+            }`}>
+              
+              {/* Spent vs Remaining text */}
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-neutral-500">ใช้งบไปแล้ว</span>
+                    <span className="text-[11px] text-neutral-400">/ ฿{totalBudget.toLocaleString()}</span>
+                  </div>
+                  <div className={`text-2xl sm:text-3xl font-black tracking-tight mt-0.5 ${isOver ? "text-rose-600" : "text-neutral-900"}`}>
+                    ฿{totalPrice.toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Status Pill */}
+                <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                  isOver 
+                    ? "bg-rose-100 text-rose-700 border border-rose-200" 
+                    : remaining < totalBudget * 0.15 
+                    ? "bg-amber-100 text-amber-800" 
+                    : "bg-emerald-100 text-emerald-800"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOver ? "bg-rose-600 animate-pulse" : "bg-emerald-600"}`} />
+                  {isOver ? `เกินงบ ฿${Math.abs(remaining).toLocaleString()}` : `คงเหลือ ฿${remaining.toLocaleString()}`}
+                </div>
+              </div>
+
+              {/* Stacked Progress Bar */}
+              <div className="h-2.5 w-full bg-neutral-200/60 rounded-full overflow-hidden flex p-0.5 gap-0.5 mb-3">
+                {grouped.map(({ key, spend }) => {
+                  if (spend === 0) return null;
+                  // Use max(totalPrice, totalBudget) so overflow doesn't break CSS width
+                  const pct = (spend / Math.max(totalPrice, totalBudget)) * 100;
+                  return (
+                    <motion.div
+                      key={key}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                      className={`h-full rounded-full ${CAT_THEME[key].barBg}`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Compact Breakdown Pills (Replaced the 3 big chunky boxes) */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-neutral-200/50">
+                {grouped.map(({ key, spend }) => {
+                  if (spend === 0) return null;
+                  const theme = CAT_THEME[key];
+                  return (
+                    <div key={key} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${theme.pillBg}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
+                      <span className="text-neutral-600">{theme.label}:</span>
+                      <span className={`font-bold ${theme.text}`}>฿{spend.toLocaleString()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ── 3. Smart Login Notice ───────────────────────────────── */}
+        {!isLoggedIn && (
+          <div className="px-6 mb-2 shrink-0">
+            <div className="bg-neutral-900 text-white rounded-xl p-3 flex items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-xs text-neutral-200 truncate">เข้าสู่ระบบเพื่อบันทึกทริปนี้เก็บไว้ดูภายหลัง</span>
+              </div>
+              <button 
+                onClick={onLoginRequired}
+                className="text-xs font-bold bg-white text-black px-3 py-1.5 rounded-lg hover:bg-neutral-100 shrink-0 transition-all"
+              >
+                ล็อกอิน
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── 4. Scrollable Body (Your Cards) ────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-6 pt-1 pb-4 space-y-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-neutral-100 flex items-center justify-center mb-3 text-neutral-400">
+                <Luggage className="w-7 h-7" />
+              </div>
+              <p className="text-sm font-bold text-neutral-700">ยังไม่มีรายการในทริป</p>
+              <p className="text-xs text-neutral-400 mt-0.5 max-w-[200px]">เลือกสถานที่ท่องเที่ยวหรือที่พักที่สนใจเพิ่มเข้ามาได้เลย</p>
+            </div>
+          ) : (
+            grouped.filter(g => g.items.length > 0).map(({ key, items: catItems }) => (
+              <CategorySection
+                key={key}
+                categoryKey={key}
+                items={catItems}
+                onRemove={onRemove}
+                getImageUrl={getImageUrl}
+              />
+            ))
+          )}
+        </div>
+
+        {/* ── 5. Sticky Action Footer (Cleaned redundancy) ────────── */}
+        <div className="p-4 sm:px-6 sm:py-4 bg-white/90 backdrop-blur-md border-t border-neutral-100 shrink-0 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block">ยอดรวมสุทธิ</span>
+            <div className="flex items-baseline gap-1.5 truncate">
+              <span className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight">
+                ฿{totalPrice.toLocaleString()}
+              </span>
+              {totalBudget > 0 && isOver && (
+                <span className="text-xs font-bold text-rose-600 shrink-0">(เกินงบ)</span>
+              )}
+            </div>
+          </div>
+
+          <div className="shrink-0 w-[55%] sm:w-[220px]">
+            {isLoggedIn ? (
+              <button
+                onClick={onSave}
+                disabled={items.length === 0 || isLoading}
+                className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 px-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-neutral-900/15 active:scale-[0.98] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <RefreshCcw className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <BadgeCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span className="truncate">บันทึกทริปนี้</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={onLoginRequired}
+                className="w-full bg-neutral-900 hover:bg-black text-white py-3.5 px-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all"
+              >
+                <LogIn className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="truncate">ล็อกอินเพื่อบันทึก</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Success Modal ────────────────────────────────────────────────────────────
+
+function SuccessModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        className="relative z-10 bg-white rounded-3xl p-8 shadow-2xl max-w-xs w-full text-center"
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.1, type: "spring", stiffness: 500, damping: 20 }}
+          className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5"
+        >
+          <BadgeCheck className="w-10 h-10 text-emerald-500" />
+        </motion.div>
+        <h3 className="text-xl font-bold text-neutral-900 mb-2">
+          บันทึกทริปแล้ว! 🎉
+        </h3>
+        <p className="text-neutral-500 text-sm mb-6">
+          ทริปของคุณถูกบันทึกเรียบร้อยแล้ว
+        </p>
+        <button
+          onClick={onClose}
+          className="w-full bg-emerald-500 text-white py-3.5 rounded-xl font-semibold hover:bg-emerald-600 active:scale-[0.98] transition-all"
+        >
+          เยี่ยม!
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function BudgetTripPlanner() {
+export default function BudgetTripPlanner({
+  isLoggedIn = false,
+}: BudgetTripPlannerProps) {
   const [mode, setMode] = useState<TripMode>("total");
   const [totalBudget, setTotalBudget] = useState<string>("");
   const [customBudgets, setCustomBudgets] = useState({
@@ -40,23 +776,42 @@ export default function BudgetTripPlanner() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [tripData, setTripData] = useState<any>(null);
-
-  // ตะกร้า + สถานะ Drawer
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const router = useRouter();
+  // Modals
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [overBudgetItem, setOverBudgetItem] = useState<TripItem | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  // ราคารวมทุกรายการในตะกร้า
-  const totalPrice = selectedItems.reduce(
-    (sum, { item }) => sum + (item.min_price || 0),
+  // ─── Budget validation ─────────────────────────────────────────────────────
+  const { valid: budgetValid, hint: budgetHint } = useBudgetValid(
+    mode,
+    totalBudget,
+    customBudgets
+  );
+
+  // ─── Computed ──────────────────────────────────────────────────────────────
+  const effectiveBudget = (() => {
+    if (mode === "total") return Number(totalBudget) || 0;
+    return (
+      Number(customBudgets.accommodation) +
+      Number(customBudgets.food) +
+      Number(customBudgets.destination)
+    );
+  })();
+
+  const totalSpent = selectedItems.reduce(
+    (s, { item }) => s + (item.min_price || 0),
     0
   );
 
-  // ─── API Calls ──────────────────────────────────────────────────────────────
-
+  // ─── API ───────────────────────────────────────────────────────────────────
   const handleGenerate = async () => {
+    if (!budgetValid) return;
     setIsLoading(true);
     setSelectedItems([]);
-    setIsCartOpen(false);
+    setIsSummaryOpen(false);
 
     try {
       const payload = {
@@ -83,13 +838,16 @@ export default function BudgetTripPlanner() {
       setTripData(data.trip);
     } catch (error) {
       console.error(error);
-      alert("เกิดข้อผิดพลาดในการดึงข้อมูล");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSaveTrip = async () => {
+    if (!isLoggedIn) {
+      setShowLoginPrompt(true);
+      return;
+    }
     if (selectedItems.length === 0) return;
     setIsLoading(true);
     try {
@@ -102,32 +860,42 @@ export default function BudgetTripPlanner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: "ทริปโคราชของฉัน",
-          totalBudget: mode === "total" ? totalBudget : "Custom",
+          totalBudget: effectiveBudget || "Custom",
           items: itemsToSave,
         }),
       });
-      alert("บันทึกทริปเรียบร้อยแล้ว!");
-      setIsCartOpen(false);
+      setIsSummaryOpen(false);
+      setShowSuccess(true);
     } catch (error) {
       console.error(error);
-      alert("เกิดข้อผิดพลาดในการบันทึกทริป");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // ─── Selection Helpers ──────────────────────────────────────────────────────
-
-  const toggleSelection = (item: TripItem, type: string) => {
-    setSelectedItems((prev) => {
-      const exists = prev.some(
+  // ─── Selection ─────────────────────────────────────────────────────────────
+  const toggleSelection = useCallback(
+    (item: TripItem, type: string) => {
+      const isSelected = selectedItems.some(
         (i) => i.item.id === item.id && i.type === type
       );
-      return exists
-        ? prev.filter((i) => !(i.item.id === item.id && i.type === type))
-        : [...prev, { item, type }];
-    });
-  };
+
+      if (isSelected) {
+        setSelectedItems((prev) =>
+          prev.filter((i) => !(i.item.id === item.id && i.type === type))
+        );
+        return;
+      }
+
+      if (effectiveBudget > 0 && totalSpent + item.min_price > effectiveBudget) {
+        setOverBudgetItem(item);
+        return;
+      }
+
+      setSelectedItems((prev) => [...prev, { item, type }]);
+    },
+    [selectedItems, effectiveBudget, totalSpent]
+  );
 
   const removeItem = (id: string | number, type: string) => {
     setSelectedItems((prev) =>
@@ -135,8 +903,7 @@ export default function BudgetTripPlanner() {
     );
   };
 
-  // ─── Image Utility ──────────────────────────────────────────────────────────
-
+  // ─── Utility ───────────────────────────────────────────────────────────────
   const getImageUrl = (item: TripItem): string => {
     const extractFirst = (val: string | string[] | undefined): string | null => {
       if (!val) return null;
@@ -158,28 +925,18 @@ export default function BudgetTripPlanner() {
     );
   };
 
-  // ─── Type label ─────────────────────────────────────────────────────────────
-
-  const typeLabel: Record<string, string> = {
-    destination: "สถานที่",
-    restaurant: "ร้านอาหาร",
-    accommodation: "ที่พัก",
-  };
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
-
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    // pb-10 เพียงพอ เพราะเราเอา Sticky Bar ออกแล้ว ใช้ Floating Button แทน
-    <div className="w-full max-w-5xl mx-auto py-12 px-4 sm:px-6 pb-10 relative">
+    <div className="w-full max-w-5xl mx-auto py-12 px-4 sm:px-6 pb-16 relative">
 
-      {/* ── Header & Input ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-100 mb-10">
+      {/* ── Header & Input ─────────────────────────────────────── */}
+      <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.05)] border border-neutral-100 mb-10">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-neutral-900 mb-6 flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-black" />
           จัดทริปตามงบประมาณ
         </h2>
 
-        {/* Toggle Mode */}
+        {/* Mode Toggle */}
         <div className="flex bg-neutral-100/80 p-1 rounded-2xl mb-8 w-full max-w-sm relative">
           <button
             onClick={() => setMode("total")}
@@ -208,7 +965,7 @@ export default function BudgetTripPlanner() {
           />
         </div>
 
-        {/* Input Fields */}
+        {/* Inputs */}
         <AnimatePresence mode="wait">
           {mode === "total" ? (
             <motion.div
@@ -248,8 +1005,12 @@ export default function BudgetTripPlanner() {
                 { key: "destination", label: "ที่เที่ยว", icon: <MapPin className="w-4 h-4" /> },
               ].map(({ key, label, icon }) => (
                 <div key={key}>
-                  <label className="block text-sm font-medium text-neutral-600 mb-2 flex items-center gap-1.5">
+                  <label className="text-sm font-medium text-neutral-600 mb-2 flex items-center gap-1.5">
                     {icon} {label}
+                    {/* Red dot if empty */}
+                    {!Number(customBudgets[key as keyof typeof customBudgets]) && (
+                      <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-auto" />
+                    )}
                   </label>
                   <input
                     type="number"
@@ -258,7 +1019,11 @@ export default function BudgetTripPlanner() {
                       setCustomBudgets({ ...customBudgets, [key]: e.target.value })
                     }
                     placeholder="฿"
-                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black/5 focus:border-neutral-400 transition-all outline-none"
+                    className={`w-full px-4 py-3 bg-neutral-50 border rounded-xl focus:bg-white focus:ring-2 focus:ring-black/5 transition-all outline-none ${
+                      !Number(customBudgets[key as keyof typeof customBudgets])
+                        ? "border-neutral-200"
+                        : "border-emerald-300 focus:border-emerald-400"
+                    }`}
                   />
                 </div>
               ))}
@@ -266,198 +1031,142 @@ export default function BudgetTripPlanner() {
           )}
         </AnimatePresence>
 
-        <button
-          onClick={handleGenerate}
-          disabled={isLoading}
-          className="mt-8 bg-black text-white px-8 py-3.5 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? (
-            <RefreshCcw className="w-5 h-5 animate-spin" />
-          ) : (
-            <>
-              เริ่มจัดทริป <ChevronRight className="w-4 h-4" />
-            </>
-          )}
-        </button>
+        {/* Generate Button — disabled when budget not filled */}
+        <div className="mt-8 flex items-center gap-3">
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading || !budgetValid}
+            title={!budgetValid ? budgetHint : undefined}
+            className={`bg-black text-white px-8 py-3.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all ${
+              budgetValid && !isLoading
+                ? "hover:bg-neutral-800 active:scale-[0.98]"
+                : "opacity-40 cursor-not-allowed"
+            }`}
+          >
+            {isLoading ? (
+              <RefreshCcw className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                เริ่มจัดทริป <ChevronRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+
+          {/* Inline hint when budget not filled */}
+          <AnimatePresence>
+            {!budgetValid && (
+              <motion.p
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                className="text-xs text-neutral-400"
+              >
+                {budgetHint}
+              </motion.p>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* ── Results ───────────────────────────────────────────────────── */}
+      {/* ── Results ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {tripData && !isLoading && (
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-            className="space-y-12"
           >
-            <TripRow
-              title="สถานที่ท่องเที่ยวแนะนำ"
-              icon={<MapPin className="w-5 h-5 text-blue-500" />}
-              items={tripData.destinations}
-              type="destination"
-              selectedItems={selectedItems}
-              onToggle={toggleSelection}
-              getImageUrl={getImageUrl}
+            <BudgetBar
+              spent={totalSpent}
+              total={effectiveBudget}
+              count={selectedItems.length}
+              onOpenSummary={() => setIsSummaryOpen(true)}
             />
-            <TripRow
-              title="ร้านอาหารในงบ"
-              icon={<Utensils className="w-5 h-5 text-orange-500" />}
-              items={tripData.restaurants}
-              type="restaurant"
-              selectedItems={selectedItems}
-              onToggle={toggleSelection}
-              getImageUrl={getImageUrl}
-            />
-            <TripRow
-              title="ที่พักน่านอน"
-              icon={<BedDouble className="w-5 h-5 text-purple-500" />}
-              items={tripData.accommodations}
-              type="accommodation"
-              selectedItems={selectedItems}
-              onToggle={toggleSelection}
-              getImageUrl={getImageUrl}
-            />
+
+            <div className="space-y-12">
+              <TripRow
+                title="สถานที่ท่องเที่ยวแนะนำ"
+                icon={<MapPin className="w-5 h-5 text-blue-500" />}
+                items={tripData.destinations}
+                type="destination"
+                selectedItems={selectedItems}
+                onToggle={toggleSelection}
+                getImageUrl={getImageUrl}
+                budget={effectiveBudget}
+                spent={totalSpent}
+              />
+              <TripRow
+                title="ร้านอาหารในงบ"
+                icon={<Utensils className="w-5 h-5 text-orange-500" />}
+                items={tripData.restaurants}
+                type="restaurant"
+                selectedItems={selectedItems}
+                onToggle={toggleSelection}
+                getImageUrl={getImageUrl}
+                budget={effectiveBudget}
+                spent={totalSpent}
+              />
+              <TripRow
+                title="ที่พักน่านอน"
+                icon={<BedDouble className="w-5 h-5 text-purple-500" />}
+                items={tripData.accommodations}
+                type="accommodation"
+                selectedItems={selectedItems}
+                onToggle={toggleSelection}
+                getImageUrl={getImageUrl}
+                budget={effectiveBudget}
+                spent={totalSpent}
+              />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Floating Cart Button ──────────────────────────────────────── */}
+      {/* ── Modals ──────────────────────────────────────────────── */}
       <AnimatePresence>
-        {selectedItems.length > 0 && !isCartOpen && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsCartOpen(true)}
-            className="fixed bottom-8 right-8 z-[50] w-16 h-16 bg-black text-white rounded-full shadow-2xl flex items-center justify-center border-4 border-white"
-          >
-            <Luggage className="w-7 h-7" />
-            {/* Badge จำนวนรายการ */}
-            <motion.div
-              key={selectedItems.length}
-              initial={{ scale: 1.6 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 500, damping: 20 }}
-              className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow"
-            >
-              {selectedItems.length}
-            </motion.div>
-          </motion.button>
+        {isSummaryOpen && (
+          <TripSummaryModal
+            items={selectedItems}
+            totalBudget={effectiveBudget}
+            isLoggedIn={isLoggedIn}
+            onClose={() => setIsSummaryOpen(false)}
+            onSave={handleSaveTrip}
+            onLoginRequired={() => {
+              setIsSummaryOpen(false);
+              setShowLoginPrompt(true);
+            }}
+            isLoading={isLoading}
+            onRemove={removeItem}
+            getImageUrl={getImageUrl}
+          />
         )}
       </AnimatePresence>
 
-      {/* ── Cart Drawer ───────────────────────────────────────────────── */}
       <AnimatePresence>
-        {isCartOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsCartOpen(false)}
-              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[60]"
-            />
-
-            {/* Drawer Panel */}
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="fixed top-0 right-0 h-full w-full max-w-md bg-white z-[70] shadow-2xl flex flex-col"
-            >
-              {/* Drawer Header */}
-              <div className="flex justify-between items-center px-6 py-5 border-b border-neutral-100">
-                <div>
-                  <h3 className="text-xl font-bold text-neutral-900">สรุปทริปของคุณ</h3>
-                  <p className="text-sm text-neutral-400 mt-0.5">
-                    {selectedItems.length} รายการที่เลือก
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors"
-                >
-                  <X className="w-5 h-5 text-neutral-600" />
-                </button>
-              </div>
-
-              {/* Drawer Items */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-                <AnimatePresence initial={false}>
-                  {selectedItems.map(({ item, type }) => (
-                    <motion.div
-                      key={`${type}-${item.id}`}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20, height: 0, marginBottom: 0 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                      className="flex gap-4 p-3 border border-neutral-100 rounded-2xl bg-neutral-50/50 hover:bg-white transition-colors"
-                    >
-                      {/* Thumbnail */}
-                      <img
-                        src={getImageUrl(item)}
-                        alt={item.name}
-                        className="w-16 h-16 rounded-xl object-cover shrink-0"
-                      />
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">
-                          {typeLabel[type] ?? type}
-                        </p>
-                        <p className="font-semibold text-sm text-neutral-900 leading-snug line-clamp-2">
-                          {item.name}
-                        </p>
-                        <p className="text-blue-600 font-bold text-sm mt-1">
-                          ฿{item.min_price.toLocaleString()}
-                        </p>
-                      </div>
-                      {/* Remove */}
-                      <button
-                        onClick={() => removeItem(item.id, type)}
-                        className="self-start mt-1 w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                      </button>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                {/* Empty state */}
-                {selectedItems.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-20 text-neutral-400">
-                    <Luggage className="w-12 h-12 mb-3 opacity-30" />
-                    <p className="text-sm">ยังไม่ได้เลือกรายการ</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Drawer Footer */}
-              <div className="px-6 py-5 border-t border-neutral-100 bg-white">
-                <div className="flex justify-between items-baseline mb-4">
-                  <span className="text-sm text-neutral-500">ราคารวมทั้งหมด</span>
-                  <span className="text-2xl font-bold text-neutral-900">
-                    ฿{totalPrice.toLocaleString()}
-                  </span>
-                </div>
-                <button
-                  onClick={handleSaveTrip}
-                  disabled={selectedItems.length === 0 || isLoading}
-                  className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-600/20"
-                >
-                  {isLoading ? (
-                    <RefreshCcw className="w-5 h-5 animate-spin" />
-                  ) : (
-                    "บันทึกทริปนี้"
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </>
+        {overBudgetItem && (
+          <OverBudgetModal
+            item={overBudgetItem}
+            currentSpent={totalSpent}
+            budget={effectiveBudget}
+            onClose={() => setOverBudgetItem(null)}
+          />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showLoginPrompt && (
+          <LoginPromptModal
+            onClose={() => setShowLoginPrompt(false)}
+            onLogin={() => {
+              setShowLoginPrompt(false);
+              router.push("/sign-in");
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSuccess && <SuccessModal onClose={() => setShowSuccess(false)} />}
       </AnimatePresence>
     </div>
   );
@@ -466,13 +1175,8 @@ export default function BudgetTripPlanner() {
 // ─── TripRow Component ────────────────────────────────────────────────────────
 
 function TripRow({
-  title,
-  icon,
-  items,
-  type,
-  selectedItems,
-  onToggle,
-  getImageUrl,
+  title, icon, items, type, selectedItems,
+  onToggle, getImageUrl, budget, spent,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -481,6 +1185,8 @@ function TripRow({
   selectedItems: SelectedItem[];
   onToggle: (item: TripItem, type: string) => void;
   getImageUrl: (item: TripItem) => string;
+  budget: number;
+  spent: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -518,7 +1224,6 @@ function TripRow({
       </div>
 
       <div className="relative">
-        {/* ปุ่มเลื่อนซ้าย */}
         <AnimatePresence>
           {canScrollLeft && (
             <motion.button
@@ -533,7 +1238,6 @@ function TripRow({
           )}
         </AnimatePresence>
 
-        {/* ปุ่มเลื่อนขวา */}
         <AnimatePresence>
           {canScrollRight && (
             <motion.button
@@ -548,7 +1252,6 @@ function TripRow({
           )}
         </AnimatePresence>
 
-        {/* Scroll Container */}
         <div
           ref={scrollRef}
           onScroll={checkScroll}
@@ -564,6 +1267,8 @@ function TripRow({
               const isSelected = selectedItems.some(
                 (i) => i.item.id === item.id && i.type === type
               );
+              const wouldExceed =
+                !isSelected && budget > 0 && spent + item.min_price > budget;
 
               return (
                 <motion.div
@@ -577,14 +1282,15 @@ function TripRow({
                       transition: { type: "spring", stiffness: 300, damping: 24 },
                     },
                   }}
-                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                  whileHover={{ y: wouldExceed ? 0 : -4, transition: { duration: 0.2 } }}
                   className={`snap-start shrink-0 w-[280px] bg-white rounded-2xl overflow-hidden cursor-pointer group transition-all duration-300 ${
                     isSelected
-                      ? "ring-2 ring-blue-500 shadow-[0_8px_25px_rgba(59,130,246,0.2)]"
-                      : "border border-neutral-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)]"
+                      ? "ring-2 ring-blue-500 shadow-[0_8px_25px_rgba(59,130,246,0.18)]"
+                      : wouldExceed
+                      ? "border border-neutral-100 opacity-50 cursor-not-allowed"
+                      : "border border-neutral-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-md"
                   }`}
                 >
-                  {/* Image */}
                   <div className="relative h-40 w-full overflow-hidden bg-neutral-100">
                     <img
                       src={getImageUrl(item)}
@@ -592,12 +1298,20 @@ function TripRow({
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div
-                      className={`absolute inset-0 bg-black/10 transition-opacity duration-300 ${
-                        isSelected ? "opacity-100" : "opacity-0"
+                      className={`absolute inset-0 transition-opacity duration-300 ${
+                        isSelected ? "bg-black/10 opacity-100" : "opacity-0"
                       }`}
                     />
 
-                    {/* Checkmark */}
+                    {wouldExceed && (
+                      <div className="absolute inset-0 bg-neutral-900/30 flex items-center justify-center">
+                        <span className="bg-white/90 backdrop-blur-sm text-neutral-800 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                          เกินงบ
+                        </span>
+                      </div>
+                    )}
+
                     <AnimatePresence>
                       {isSelected && (
                         <motion.div
@@ -611,15 +1325,19 @@ function TripRow({
                       )}
                     </AnimatePresence>
 
-                    {/* Price Badge */}
                     {item.min_price != null && (
-                      <div className="absolute top-3 right-3 z-10 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-neutral-900 shadow-sm">
+                      <div
+                        className={`absolute top-3 right-3 z-10 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
+                          wouldExceed
+                            ? "bg-red-50/90 text-red-600"
+                            : "bg-white/90 text-neutral-900"
+                        }`}
+                      >
                         ฿{item.min_price.toLocaleString()}
                       </div>
                     )}
                   </div>
 
-                  {/* Card Body */}
                   <div className="p-5">
                     {item.category && (
                       <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider mb-1">

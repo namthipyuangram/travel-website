@@ -1,16 +1,19 @@
-// src/app/restaurant/[id]/page.tsx (หรือ path ของคุณ)
+// src/app/restaurant/[id]/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { 
   MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, 
-  Trash2, Send, Share, Heart, Utensils, Info, CheckCircle2
+  Trash2, Send, Share, Heart, Utensils, Info, CheckCircle2,
+  ChevronLeft
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
+import toast from "react-hot-toast";
 
 interface Review {
   id: number | string;
@@ -55,24 +58,42 @@ const getParsedImages = (data: any): string[] => {
 
 export default function RestaurantDetail() {
   const params = useParams();
+  const pathname = usePathname();
   const rawId = params.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const cleanId = id?.toString().trim();
 
-  const { userId } = useAuth();
+  // ─── Supabase Auth State ───────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
+  // ─── Data State ────────────────────────────────────────────────────────────
   const [restaurant, setRestaurant] = useState<RestaurantDetailData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ─── UI State ──────────────────────────────────────────────────────────────
   const [ratingInput, setRatingInput] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [commentInput, setCommentInput] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
+  // ================= 1. ดึงข้อมูล Auth & ร้านอาหาร =================
   useEffect(() => {
+    // ดึง Session ปัจจุบัน
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+    };
+    fetchSession();
+
+    // ดึงข้อมูลร้านอาหาร
     const fetchRestaurantDetail = async () => {
       if (!cleanId) return;
       
@@ -98,7 +119,7 @@ export default function RestaurantDetail() {
     };
 
     fetchRestaurantDetail();
-  }, [cleanId]);
+  }, [cleanId, supabase.auth]);
 
   // ================= 2. ดึงข้อมูลรีวิว =================
   const fetchReviews = useCallback(async () => {
@@ -129,9 +150,18 @@ export default function RestaurantDetail() {
   // ================= 3. ฟังก์ชันเพิ่มรีวิว =================
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) return alert("กรุณาเข้าสู่ระบบก่อนทำการรีวิว");
-    if (ratingInput === 0) return alert("กรุณาให้คะแนนดาว");
-    if (!commentInput.trim()) return alert("กรุณากรอกความคิดเห็น");
+    if (!user) {
+      toast.error("กรุณาเข้าสู่ระบบก่อนทำการรีวิว");
+      return;
+    }
+    if (ratingInput === 0) {
+      toast.error("กรุณาให้คะแนนดาว");
+      return;
+    }
+    if (!commentInput.trim()) {
+      toast.error("กรุณากรอกความคิดเห็น");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -152,11 +182,12 @@ export default function RestaurantDetail() {
       
       setRatingInput(0);
       setCommentInput("");
+      toast.success("ขอบคุณสำหรับรีวิวของคุณ!");
       
       const newData = await fetchReviews();
       if (newData) setReviews(newData);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งรีวิว");
+      toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งรีวิว");
     } finally {
       setIsSubmitting(false);
     }
@@ -173,15 +204,16 @@ export default function RestaurantDetail() {
       if (!res.ok) throw new Error("ลบรีวิวไม่สำเร็จ");
       
       setReviews(reviews.filter((r) => r.id !== reviewId));
+      toast.success("ลบรีวิวเรียบร้อยแล้ว");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลบรีวิว");
+      toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลบรีวิว");
     }
   };
 
   // 🌟 Premium Skeleton Loading
   if (loading) {
     return (
-      <div className="min-h-screen bg-white max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <div className="min-h-screen bg-white max-w-300 mx-auto px-4 sm:px-6 py-8">
         <div className="h-6 w-32 bg-neutral-200 rounded-md animate-pulse mb-6"></div>
         <div className="h-10 w-3/4 bg-neutral-200 rounded-lg animate-pulse mb-4"></div>
         <div className="flex gap-4 mb-8">
@@ -224,7 +256,6 @@ export default function RestaurantDetail() {
     ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1) 
     : "0.0";
   
-  // แปลงรูปภาพทั้งหมดให้ออกมาเป็น Array ที่พร้อมแสดงผล
   const images = getParsedImages(restaurant.image_url);
 
   return (
@@ -235,7 +266,7 @@ export default function RestaurantDetail() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link href="/restaurant" className="inline-flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition font-medium group">
             <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-neutral-100 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4" />
             </div>
             <span className="hidden sm:block">กลับไปหน้ารวมร้านอาหาร</span>
           </Link>
@@ -301,7 +332,7 @@ export default function RestaurantDetail() {
             {[1, 2, 3, 4].map((idx) => (
               <div key={idx} className="relative w-full h-full cursor-pointer group overflow-hidden bg-neutral-100">
                 <Image
-                  src={images[idx] || images[0]} // Fallback to main if not enough images
+                  src={images[idx] || images[0]}
                   alt={`Gallery ${idx}`}
                   fill
                   unoptimized
@@ -389,7 +420,7 @@ export default function RestaurantDetail() {
                       key={review.id} 
                       className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] group relative"
                     >
-                      {userId === review.created_by && (
+                      {user?.id === review.created_by && (
                         <button 
                           onClick={() => handleDeleteReview(review.id)} 
                           className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full transition opacity-0 group-hover:opacity-100" 
@@ -401,10 +432,10 @@ export default function RestaurantDetail() {
 
                       <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 bg-neutral-900 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-sm">
-                          {review.created_by?.substring(0, 1).toUpperCase() || "U"}
+                          U
                         </div>
                         <div>
-                          <div className="font-bold text-neutral-900">ลูกค้าไม่ประสงค์ออกนาม</div>
+                          <div className="font-bold text-neutral-900">ผู้ใช้งานทั่วไป</div>
                           <div className="text-sm text-neutral-500">
                             {new Date(review.created_at).toLocaleDateString("th-TH", { month: "long", year: "numeric" })}
                           </div>
@@ -431,7 +462,7 @@ export default function RestaurantDetail() {
             {/* ฝั่งขวา: Write Review Form */}
             <div className="lg:col-span-5 order-1 lg:order-2">
               <div className="bg-neutral-50 p-8 rounded-3xl border border-neutral-100 sticky top-28">
-                {userId ? (
+                {user ? (
                   <form onSubmit={handleSubmitReview}>
                     <h3 className="text-xl font-bold text-neutral-900 mb-6 flex items-center gap-2">
                       <MessageSquare className="w-5 h-5 text-neutral-400" />
@@ -481,9 +512,12 @@ export default function RestaurantDetail() {
                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-2xl">🔒</div>
                     <h3 className="text-lg font-bold text-neutral-900 mb-2">เข้าสู่ระบบเพื่อรีวิว</h3>
                     <p className="text-neutral-500 mb-6 text-sm">คุณจำเป็นต้องเข้าสู่ระบบเพื่อแชร์ประสบการณ์และรีวิวร้านอาหารนี้</p>
-                    <button className="px-6 py-3 bg-neutral-900 text-white font-bold rounded-full w-full hover:bg-black transition shadow-md">
+                    <Link 
+                      href={`/sign-in?redirect_url=${encodeURIComponent(pathname)}`}
+                      className="inline-block px-6 py-3 bg-neutral-900 text-white font-bold rounded-full w-full hover:bg-black transition shadow-md"
+                    >
                       เข้าสู่ระบบ / สมัครสมาชิก
-                    </button>
+                    </Link>
                   </div>
                 )}
               </div>

@@ -1,20 +1,41 @@
-import { clerkClient, auth } from "@clerk/nextjs/server";
+import { createServerClient } from "@supabase/ssr";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { roleChangeRateLimit } from "@/lib/rate-limit";
 
-export async function POST(req: Request) {
+export const POST = async (req: Request) => {
   try {
-    // 1. ตรวจสอบการล็อกอิน
-    const { userId: authUserId } = await auth();
+    // 1. สร้าง Supabase SSR Client เพื่อตรวจสอบ Session ของผู้เรียก
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll() {
+            // ละเว้นการ set cookie ใน API Route เนื่องจากเราแค่อ่านเพื่อ Verify Token
+          },
+        },
+      }
+    );
 
-    if (!authUserId) {
+    // ใช้ getUser() ตรวจสอบ Token กับเซิร์ฟเวอร์โดยตรง
+    const {
+      data: { user: caller },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !caller) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Rate limit: จำกัดจำนวนครั้งที่ "ผู้เรียก" คนนี้ยิง API นี้ได้
-    //    เช็คก่อนเช็ค admin เพื่อกัน DoS / brute-force ตั้งแต่ต้น
+    // 2. Rate limit: จำกัดจำนวนครั้งที่ผู้เรียกคนนี้ยิง API ได้
     const { success, limit, remaining, reset } = await roleChangeRateLimit.limit(
-      authUserId
+      caller.id
     );
 
     if (!success) {
@@ -31,19 +52,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. เริ่มต้น Clerk Client
-    const client = await clerkClient();
-
-    // 4. ป้องกัน Privilege Escalation: เช็คว่าคนเรียก API เป็น Admin ตัวจริงหรือไม่
-    const caller = await client.users.getUser(authUserId);
-    if (caller.publicMetadata.role !== "admin") {
+    // 3. ป้องกัน Privilege Escalation: เช็คว่าคนเรียก API เป็น Admin หรือไม่ (เช็คจาก app_metadata)
+    const callerRole = caller.app_metadata?.role;
+    if (callerRole !== "admin") {
       return NextResponse.json(
         { error: "Forbidden: Only admins can perform this action." },
         { status: 403 }
       );
     }
 
-    // 5. ดึง userId และ role จาก body (กัน body ไม่ใช่ JSON / parse พัง)
+    // 4. ดึง userId และ role จาก body
     let body: unknown;
     try {
       body = await req.json();
@@ -57,7 +75,7 @@ export async function POST(req: Request) {
 
     const { userId, role = "user" } = body as { userId?: unknown; role?: unknown };
 
-    // 6. ตรวจสอบข้อมูล
+    // 5. ตรวจสอบข้อมูล
     if (!userId || typeof userId !== "string") {
       return NextResponse.json({ error: "No userId provided" }, { status: 400 });
     }
@@ -69,29 +87,43 @@ export async function POST(req: Request) {
       );
     }
 
-    // 7. กันแอดมินเผลอลดสิทธิ์ตัวเอง (ป้องกัน lock-out จากระบบ)
-    if (userId === authUserId && role !== "admin") {
+    // 6. กันแอดมินเผลอลดสิทธิ์ตัวเอง
+    if (userId === caller.id && role !== "admin") {
       return NextResponse.json(
         { error: "You cannot remove your own admin role." },
         { status: 400 }
       );
     }
 
-    // 8. เช็คว่า target user มีอยู่จริง ก่อน update (แยก error ให้ชัดเจนกว่าปล่อยให้ throw)
-    try {
-      await client.users.getUser(userId);
-    } catch {
+    // 7. สร้าง Admin Client ที่มีสิทธิ์แก้ไขข้อมูล Auth ของผู้อื่น
+    // คำเตือน: ห้ามส่ง SUPABASE_SERVICE_ROLE_KEY ไปยังฝั่ง Client เด็ดขาด
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // 8. เช็คว่า target user มีอยู่จริง และอัปเดต Role เข้าไปใน app_metadata
+    const { data: targetUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    
+    if (getUserError || !targetUser.user) {
       return NextResponse.json({ error: "Target user not found" }, { status: 404 });
     }
 
-    // 9. อัปเดตข้อมูลเป้าหมาย
-    await client.users.updateUserMetadata(userId, {
-      publicMetadata: { role },
+    // อัปเดตข้อมูลเป้าหมาย โดยกระจายข้อมูล app_metadata เดิมลงไปด้วยเพื่อป้องกันข้อมูลเก่าหาย
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      app_metadata: { 
+        ...targetUser.user.app_metadata, 
+        role 
+      },
     });
 
-    // 10. Audit log: บันทึกว่า "ใคร" เปลี่ยน role ของ "ใคร" เป็นอะไร
+    if (updateError) {
+      throw updateError;
+    }
+
+    // 9. Audit log
     console.log(
-      `✅ Role updated by ${authUserId}: ${userId} -> ${role} at ${new Date().toISOString()}`
+      `✅ Role updated by ${caller.id}: ${userId} -> ${role} at ${new Date().toISOString()}`
     );
 
     return NextResponse.json(
@@ -102,4 +134,4 @@ export async function POST(req: Request) {
     console.error("❌ Error setting user role:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
-}
+};

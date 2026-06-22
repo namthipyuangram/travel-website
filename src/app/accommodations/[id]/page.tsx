@@ -1,13 +1,15 @@
-// src/app/accommodations/[id]/page.tsx (หรือ path ของคุณ)
+// src/app/accommodations/[id]/page.tsx
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState, useCallback } from "react";
-import { supabaseClient } from "@/lib/supabaseClient";
+import { createSupabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
+import toast from "react-hot-toast";
 import {
   MapPin,
   Phone,
@@ -15,11 +17,10 @@ import {
   ArrowLeft,
   MessageSquare,
   Trash2,
-  Send,
   Share,
   Heart,
-  ChevronRight,
   CheckCircle2,
+  ChevronLeft,
 } from "lucide-react";
 
 interface Review {
@@ -41,7 +42,7 @@ interface AccommodationDetailData {
   contact_facebook?: string;
   min_price?: number;
   max_price?: number;
-  images?: any; // ใช้ any เพื่อรับค่าที่อาจจะเป็น string, string[], หรือ JSON string
+  images?: any;
 }
 
 const getParsedImages = (data: any): string[] => {
@@ -68,31 +69,46 @@ const getParsedImages = (data: any): string[] => {
 
 export default function AccommodationDetail() {
   const params = useParams();
+  const pathname = usePathname();
   const rawId = params.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const cleanId = id?.toString().trim();
 
-  const { userId } = useAuth();
+  // ─── Supabase Auth State ───────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  const [accommodation, setAccommodation] =
-    useState<AccommodationDetailData | null>(null);
+  // ─── Data State ────────────────────────────────────────────────────────────
+  const [accommodation, setAccommodation] = useState<AccommodationDetailData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ─── UI State ──────────────────────────────────────────────────────────────
   const [ratingInput, setRatingInput] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [commentInput, setCommentInput] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
+  // ================= 1. ดึงข้อมูล Auth & ที่พัก =================
   useEffect(() => {
+    // ดึง Session ปัจจุบัน
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+    };
+    fetchSession();
+
     if (!cleanId) return;
 
     const fetchAccommodationDetail = async () => {
       try {
         setLoading(true);
-        const { data, error: supaError } = await supabaseClient
+        const { data, error: supaError } = await createSupabaseClient()
           .from("accommodations")
           .select("*")
           .eq("id", cleanId)
@@ -109,12 +125,13 @@ export default function AccommodationDetail() {
       }
     };
     fetchAccommodationDetail();
-  }, [cleanId]);
+  }, [cleanId, supabase.auth]);
 
+  // ================= 2. ดึงข้อมูลรีวิว =================
   const fetchReviews = useCallback(async () => {
     if (!cleanId) return null;
     try {
-      const { data, error: supaError } = await supabaseClient
+      const { data, error: supaError } = await createSupabaseClient()
         .from("reviews")
         .select("*")
         .eq("accommodation_id", cleanId)
@@ -136,11 +153,21 @@ export default function AccommodationDetail() {
     loadReviews();
   }, [fetchReviews]);
 
+  // ================= 3. ฟังก์ชันเพิ่ม/ลบ รีวิว =================
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) return alert("กรุณาเข้าสู่ระบบก่อนทำการรีวิว");
-    if (ratingInput === 0) return alert("กรุณาให้คะแนนดาว");
-    if (!commentInput.trim()) return alert("กรุณากรอกความคิดเห็น");
+    if (!user) {
+      toast.error("กรุณาเข้าสู่ระบบก่อนทำการรีวิว");
+      return;
+    }
+    if (ratingInput === 0) {
+      toast.error("กรุณาให้คะแนนดาว");
+      return;
+    }
+    if (!commentInput.trim()) {
+      toast.error("กรุณากรอกความคิดเห็น");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -151,16 +178,20 @@ export default function AccommodationDetail() {
           accommodation_id: cleanId,
           rating: ratingInput,
           comment: commentInput,
-          created_by: userId,
+          // API route อาจจะดึงจาก Token อยู่แล้ว แต่ส่งไปด้วยเพื่อความชัวร์หากใช้โครงสร้างเก่า
+          created_by: user.id, 
         }),
       });
       if (!res.ok) throw new Error("ไม่สามารถส่งรีวิวได้");
+      
       setRatingInput(0);
       setCommentInput("");
+      toast.success("ขอบคุณสำหรับรีวิวของคุณ!");
+
       const newData = await fetchReviews();
       if (newData) setReviews(newData);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งรีวิว");
     } finally {
       setIsSubmitting(false);
     }
@@ -173,16 +204,18 @@ export default function AccommodationDetail() {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("ลบรีวิวไม่สำเร็จ");
+      
       setReviews(reviews.filter((r) => r.id !== reviewId));
+      toast.success("ลบรีวิวเรียบร้อยแล้ว");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลบรีวิว");
     }
   };
 
   // 🌟 Loading State (Premium Skeleton)
   if (loading) {
     return (
-      <div className="min-h-screen bg-white max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <div className="min-h-screen bg-white max-w-300 mx-auto px-4 sm:px-6 py-8">
         <div className="h-6 w-32 bg-neutral-200 rounded-md animate-pulse mb-6"></div>
         <div className="h-10 w-3/4 bg-neutral-200 rounded-lg animate-pulse mb-4"></div>
         <div className="flex gap-4 mb-8">
@@ -208,7 +241,7 @@ export default function AccommodationDetail() {
   if (error || !accommodation) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-4">
-        <div className="bg-white p-10 rounded-[2rem] shadow-sm border border-neutral-100 text-center max-w-md w-full">
+        <div className="bg-white p-10 rounded-4xl shadow-sm border border-neutral-100 text-center max-w-md w-full">
           <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
             🥲
           </div>
@@ -240,35 +273,35 @@ export default function AccommodationDetail() {
   return (
     <div className="min-h-screen bg-white pb-24">
       {/* 🌟 Top Navigation */}
-      <nav className="bg-white sticky top-0 z-50 border-b border-neutral-100/80 backdrop-blur-md">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      <nav className="bg-white/90 sticky top-0 z-50 border-b border-neutral-100/80 backdrop-blur-md transition-all">
+        <div className="max-w-300 mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link
             href="/accommodations"
             className="inline-flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition font-medium group"
           >
             <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-neutral-100 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4" />
             </div>
             <span className="hidden sm:block">กลับไปหน้าที่พัก</span>
           </Link>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-50 rounded-full font-medium text-sm text-neutral-700 transition">
-              <Share className="w-4 h-4" /> แชร์
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button className="flex items-center gap-2 px-3 sm:px-4 py-2 hover:bg-neutral-50 rounded-full font-medium text-sm text-neutral-700 transition">
+              <Share className="w-4 h-4" /> <span className="hidden sm:block">แชร์</span>
             </button>
             <button
               onClick={() => setIsSaved(!isSaved)}
-              className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-50 rounded-full font-medium text-sm text-neutral-700 transition"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 hover:bg-neutral-50 rounded-full font-medium text-sm text-neutral-700 transition"
             >
               <Heart
-                className={`w-4 h-4 ${isSaved ? "fill-rose-500 text-rose-500" : ""}`}
+                className={`w-4 h-4 transition-colors ${isSaved ? "fill-rose-500 text-rose-500" : ""}`}
               />{" "}
-              บันทึก
+              <span className="hidden sm:block">บันทึก</span>
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-300 mx-auto px-4 sm:px-6 py-8">
         {/* 🌟 Title & Meta (สไตล์ Airbnb) */}
         <div className="mb-6">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 mb-4 tracking-tight leading-tight">
@@ -292,7 +325,8 @@ export default function AccommodationDetail() {
             )}
             {accommodation.address && (
               <div className="flex items-center gap-1 underline cursor-pointer hover:text-neutral-500 before:content-['·'] before:mr-2 before:text-neutral-300 before:no-underline">
-                {accommodation.address}
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span className="truncate max-w-50 sm:max-w-none">{accommodation.address}</span>
               </div>
             )}
           </div>
@@ -315,10 +349,10 @@ export default function AccommodationDetail() {
             {[1, 2, 3, 4].map((idx) => (
               <div
                 key={idx}
-                className="relative w-full h-full cursor-pointer group overflow-hidden"
+                className="relative w-full h-full cursor-pointer group overflow-hidden bg-neutral-100"
               >
                 <Image
-                  src={images[idx] || images[0]} // Fallback to main if not enough images
+                  src={images[idx] || images[0]} 
                   alt={`Gallery ${idx}`}
                   fill
                   unoptimized
@@ -345,7 +379,7 @@ export default function AccommodationDetail() {
               สิ่งอำนวยความสะดวก & บริการ
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 mb-10">
-              {/* Mockup Amenities (ถ้าคุณมีข้อมูลจริง สามารถ map มาใส่ได้) */}
+              {/* Mockup Amenities */}
               {[
                 "Wi-Fi ฟรีความเร็วสูง",
                 "ที่จอดรถส่วนตัว",
@@ -389,7 +423,7 @@ export default function AccommodationDetail() {
                     href={`https://line.me/ti/p/${accommodation.contact_line}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-[#00B900] text-white font-bold rounded-xl hover:bg-[#009900] transition active:scale-[0.98]"
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-[#00B900] text-white font-bold rounded-xl hover:bg-[#009900] transition active:scale-[0.98] shadow-sm"
                   >
                     <MessageSquare className="w-5 h-5" /> ติดต่อผ่าน LINE
                   </a>
@@ -397,7 +431,7 @@ export default function AccommodationDetail() {
                 {accommodation.contact_phone && (
                   <a
                     href={`tel:${accommodation.contact_phone}`}
-                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-neutral-900 text-white font-bold rounded-xl hover:bg-black transition active:scale-[0.98]"
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-neutral-900 text-white font-bold rounded-xl hover:bg-black transition active:scale-[0.98] shadow-sm"
                   >
                     <Phone className="w-5 h-5" /> โทร{" "}
                     {accommodation.contact_phone}
@@ -408,7 +442,7 @@ export default function AccommodationDetail() {
                     href={accommodation.contact_facebook}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-white border-2 border-neutral-200 text-neutral-700 font-bold rounded-xl hover:bg-neutral-50 hover:border-neutral-300 transition active:scale-[0.98]"
+                    className="flex items-center justify-center gap-2 w-full py-3.5 bg-white border border-neutral-200 text-neutral-700 font-bold rounded-xl hover:bg-neutral-50 hover:border-neutral-300 transition active:scale-[0.98]"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -443,7 +477,6 @@ export default function AccommodationDetail() {
                         />
                       </g>
                     </svg>
-
                     <span>เข้าชมเพจ Facebook</span>
                   </a>
                 )}
@@ -479,7 +512,7 @@ export default function AccommodationDetail() {
                       key={review.id}
                       className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] group relative"
                     >
-                      {userId === review.created_by && (
+                      {user?.id === review.created_by && (
                         <button
                           onClick={() => handleDeleteReview(review.id)}
                           className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full transition opacity-0 group-hover:opacity-100"
@@ -491,12 +524,11 @@ export default function AccommodationDetail() {
 
                       <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 bg-neutral-900 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-sm">
-                          {review.created_by?.substring(0, 1).toUpperCase() ||
-                            "U"}
+                          U
                         </div>
                         <div>
                           <div className="font-bold text-neutral-900">
-                            ผู้ไม่ประสงค์ออกนาม
+                            ผู้ใช้งานทั่วไป
                           </div>
                           <div className="text-sm text-neutral-500">
                             {new Date(review.created_at).toLocaleDateString(
@@ -511,7 +543,7 @@ export default function AccommodationDetail() {
                         {[...Array(5)].map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-3.5 h-3.5 ${i < review.rating ? "fill-neutral-900 text-neutral-900" : "text-neutral-200"}`}
+                            className={`w-4 h-4 ${i < review.rating ? "fill-amber-400 text-amber-400" : "text-neutral-200"}`}
                           />
                         ))}
                       </div>
@@ -524,7 +556,7 @@ export default function AccommodationDetail() {
                 </div>
               ) : (
                 <div className="text-left py-8">
-                  <p className="text-neutral-500">
+                  <p className="text-neutral-500 text-lg">
                     เป็นคนแรกที่แชร์ประสบการณ์การเข้าพักของคุณที่นี่!
                   </p>
                 </div>
@@ -534,17 +566,18 @@ export default function AccommodationDetail() {
             {/* ฝั่งขวา: Write Review Form */}
             <div className="lg:col-span-5 order-1 lg:order-2">
               <div className="bg-neutral-50 p-8 rounded-3xl border border-neutral-100 sticky top-28">
-                {userId ? (
+                {user ? (
                   <form onSubmit={handleSubmitReview}>
-                    <h3 className="text-xl font-bold text-neutral-900 mb-6">
+                    <h3 className="text-xl font-bold text-neutral-900 mb-6 flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-neutral-400" />
                       เขียนรีวิวของคุณ
                     </h3>
 
                     <div className="mb-6">
-                      <label className="block text-sm font-medium text-neutral-700 mb-2">
+                      <label className="block text-sm font-medium text-neutral-700 mb-3">
                         ให้คะแนนที่พักนี้
                       </label>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <button
                             key={star}
@@ -555,7 +588,7 @@ export default function AccommodationDetail() {
                             className="focus:outline-none transition-transform hover:scale-110"
                           >
                             <Star
-                              className={`w-8 h-8 ${(hoverRating || ratingInput) >= star ? "fill-amber-400 text-amber-400" : "text-neutral-300"}`}
+                              className={`w-9 h-9 ${(hoverRating || ratingInput) >= star ? "fill-amber-400 text-amber-400" : "text-neutral-300"}`}
                             />
                           </button>
                         ))}
@@ -570,7 +603,7 @@ export default function AccommodationDetail() {
                         value={commentInput}
                         onChange={(e) => setCommentInput(e.target.value)}
                         placeholder="ที่พักสะอาดไหม? ทำเลที่ตั้งดีหรือเปล่า? แชร์ให้ทุกคนรู้สิ..."
-                        className="w-full p-4 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none bg-white transition"
+                        className="w-full p-4 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none bg-white transition text-neutral-800"
                         rows={4}
                         required
                       />
@@ -595,9 +628,12 @@ export default function AccommodationDetail() {
                     <p className="text-neutral-500 mb-6 text-sm">
                       คุณจำเป็นต้องเข้าสู่ระบบก่อน เพื่อความโปร่งใสของข้อมูล
                     </p>
-                    <button className="px-6 py-3 bg-neutral-900 text-white font-bold rounded-full w-full hover:bg-black transition">
+                    <Link
+                      href={`/sign-in?redirect_url=${encodeURIComponent(pathname)}`}
+                      className="inline-block px-6 py-3.5 bg-neutral-900 text-white font-bold rounded-full w-full hover:bg-black transition shadow-md"
+                    >
                       เข้าสู่ระบบ / สมัครสมาชิก
-                    </button>
+                    </Link>
                   </div>
                 )}
               </div>

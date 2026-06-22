@@ -1,9 +1,10 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
 import { useState, useEffect, useCallback } from "react";
-import { supabaseClient } from "@/lib/supabaseClient";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
+import toast from "react-hot-toast";
 
 interface Accommodation {
   id: string;
@@ -29,14 +30,31 @@ interface AddAccommodationModalProps {
   editAccommodation?: Accommodation | null;
 }
 
-export function AddAccommodationModal({
+export const AddAccommodationModal = ({
   isOpen,
   onClose,
   onSuccess,
   editAccommodation,
-}: AddAccommodationModalProps) {
-  const { user } = useUser();
+}: AddAccommodationModalProps) => {
+  // ─── Supabase Auth ─────────────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
+  // ดึงข้อมูล User เมื่อ Modal ถูกเปิด
+  useEffect(() => {
+    if (isOpen) {
+      const fetchUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
+      };
+      fetchUser();
+    }
+  }, [isOpen, supabase.auth]);
+
+  // ─── Form States ───────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -57,7 +75,7 @@ export function AddAccommodationModal({
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Lock body scroll when modal is open
+  // Lock body scroll เมื่อ Modal เปิด
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -69,6 +87,7 @@ export function AddAccommodationModal({
     };
   }, [isOpen]);
 
+  // ตั้งค่าข้อมูลเริ่มต้นเมื่อเป็นการแก้ไข
   useEffect(() => {
     if (editAccommodation) {
       setFormData({
@@ -106,6 +125,7 @@ export function AddAccommodationModal({
     setError(null);
   };
 
+  // ─── Image Processing ──────────────────────────────────────────────────────
   const processFiles = useCallback((files: File[]) => {
     const totalImages = existingImages.length + imageFiles.length + files.length;
     if (totalImages > 5) {
@@ -194,9 +214,14 @@ export function AddAccommodationModal({
     }
   };
 
+  // ─── Form Submission ───────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    
+    if (!user) {
+      setError("กรุณาเข้าสู่ระบบก่อนทำรายการ");
+      return;
+    }
 
     if (!formData.min_price) {
       setError("กรุณาระบุราคาเริ่มต้น");
@@ -233,21 +258,23 @@ export function AddAccommodationModal({
       };
 
       if (editAccommodation) {
-        const { error: updateError } = await supabaseClient
+        const { error: updateError } = await supabase
           .from("accommodations")
           .update(payload)
           .eq("id", editAccommodation.id);
 
         if (updateError) throw updateError;
+        toast.success("อัปเดตข้อมูลที่พักเรียบร้อยแล้ว");
       } else {
-        const { error: insertError } = await supabaseClient
+        const { error: insertError } = await supabase
           .from("accommodations")
           .insert({
             ...payload,
-            created_by: user.id,
+            created_by: user.id, // ✅ ใช้ user.id ของ Supabase
           });
 
         if (insertError) throw insertError;
+        toast.success("เพิ่มที่พักใหม่เรียบร้อยแล้ว");
       }
 
       resetForm();
@@ -256,6 +283,7 @@ export function AddAccommodationModal({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการบันทึก";
       setError(errorMessage);
+      toast.error("บันทึกข้อมูลไม่สำเร็จ");
     } finally {
       setSubmitting(false);
     }
@@ -507,7 +535,7 @@ export function AddAccommodationModal({
                   onClose();
                 }}
                 disabled={submitting || uploading}
-                className="px-6 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98] transition-all disabled:opacity-50"
+                className="px-6 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-900 active:scale-95 transition-all disabled:opacity-50"
               >
                 ยกเลิก
               </button>
@@ -515,7 +543,7 @@ export function AddAccommodationModal({
                 form="accommodation-form"
                 type="submit"
                 disabled={submitting || uploading}
-                className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-600/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {(submitting || uploading) && (
                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -527,7 +555,7 @@ export function AddAccommodationModal({
                   ? `กำลังอัปโหลด... (${imageFiles.length})`
                   : submitting
                   ? editAccommodation ? "กำลังอัปเดต..." : "กำลังบันทึก..."
-                  : editAccommodation ? "อัปเดตข้อมูล" : "บันทึกข้อมูล"}
+                  : editAccommodation ? "อัปเดตข้อมูล" : "บันึกข้อมูล"}
               </button>
             </div>
           </motion.div>
@@ -535,4 +563,4 @@ export function AddAccommodationModal({
       )}
     </AnimatePresence>
   );
-}
+};

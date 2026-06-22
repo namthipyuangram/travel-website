@@ -1,5 +1,5 @@
-import Navbar from "@/component/User/Navbar";
-import RestaurantList from "../../component/RestaurantList";
+import { Navbar } from "@/component/User/Navbar";
+import RestaurantList from "@/component/RestaurantList"; // ปรับเป็น Absolute path ให้เหมือน Navbar
 import Link from "next/link";
 
 export default function RestaurantsPage() {
@@ -7,7 +7,6 @@ export default function RestaurantsPage() {
     <>
       <Navbar />
         
-      {/* 🌟 1. Hero Banner Section */}
       {/* 🌟 1. Hero Banner Section */}
       <div className="relative w-full min-h-[400px] md:min-h-[500px] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
         
@@ -18,7 +17,7 @@ export default function RestaurantsPage() {
         ></div>
         
         {/* 2. ดรอปแสงพื้นหลัง: ใช้สีดำความทึบ 60% เพื่อดึงตัวหนังสือให้เด้งขึ้นมา */}
-        <div className="absolute inset-0 bg-white/10"></div>
+        <div className="absolute inset-0 bg-black/60"></div> {/* แก้ไขเป็น bg-black/60 ตามคอมเมนต์ */}
         
         {/* 3. เนื้อหา: ใช้ Drop Shadow สีดำเข้มๆ รองหลังตัวหนังสืออีกชั้น */}
         <div className="relative z-10 text-center px-4 md:px-8 w-full max-w-4xl mx-auto mt-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">

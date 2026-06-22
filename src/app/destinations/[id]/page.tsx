@@ -1,17 +1,20 @@
-// src/app/destinations/[id]/page.tsx (หรือ path ของคุณ)
+// src/app/destinations/[id]/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import {
   MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, 
   Trash2, Send, Share, Heart, Ticket, Info, CheckCircle2,
-  Navigation
+  Navigation,
+  ChevronLeft
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useParams, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
+import toast from "react-hot-toast";
 
 interface Review {
   id: number | string;
@@ -61,25 +64,40 @@ const getParsedImages = (data: any, fallbackData?: any): string[] => {
 
 export default function DestinationDetail() {
   const params = useParams();
+  const pathname = usePathname();
   const rawId = params.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
   const cleanId = id?.toString().trim();
-  
-  const { userId } = useAuth();
 
+  // ─── Supabase Auth State ───────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  // ─── Data State ────────────────────────────────────────────────────────────
   const [destination, setDestination] = useState<DestinationDetailData | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ─── UI State ──────────────────────────────────────────────────────────────
   const [ratingInput, setRatingInput] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [commentInput, setCommentInput] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  // ================= 1. ดึงข้อมูลสถานที่ =================
+  // ================= 1. ดึงข้อมูล Auth & สถานที่ =================
   useEffect(() => {
+    // ดึง Session ปัจจุบัน
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+    };
+    fetchSession();
+
     const fetchDestinationDetail = async () => {
       if (!cleanId) return;
       try {
@@ -95,7 +113,7 @@ export default function DestinationDetail() {
       }
     };
     fetchDestinationDetail();
-  }, [cleanId]);
+  }, [cleanId, supabase.auth]);
 
   // ================= 2. ดึงข้อมูลรีวิว =================
   const fetchReviews = useCallback(async () => {
@@ -116,9 +134,18 @@ export default function DestinationDetail() {
   // ================= 3. ฟังก์ชันเพิ่ม/ลบ รีวิว =================
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) return alert("กรุณาเข้าสู่ระบบก่อนทำการรีวิว");
-    if (ratingInput === 0) return alert("กรุณาให้คะแนนดาว");
-    if (!commentInput.trim()) return alert("กรุณากรอกความคิดเห็น");
+    if (!user) {
+      toast.error("กรุณาเข้าสู่ระบบก่อนทำการรีวิว");
+      return;
+    }
+    if (ratingInput === 0) {
+      toast.error("กรุณาให้คะแนนดาว");
+      return;
+    }
+    if (!commentInput.trim()) {
+      toast.error("กรุณากรอกความคิดเห็น");
+      return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -131,10 +158,12 @@ export default function DestinationDetail() {
       
       setRatingInput(0);
       setCommentInput("");
+      toast.success("ขอบคุณสำหรับรีวิวของคุณ!");
+
       const updatedReviews = await fetchReviews();
       if (updatedReviews) setReviews(updatedReviews);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งรีวิว");
+      toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการส่งรีวิว");
     } finally {
       setIsSubmitting(false);
     }
@@ -146,15 +175,16 @@ export default function DestinationDetail() {
       const res = await fetch(`/api/reviews?id=${reviewId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("ลบรีวิวไม่สำเร็จ");
       setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      toast.success("ลบรีวิวเรียบร้อยแล้ว");
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลบรีวิว");
+      toast.error(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการลบรีวิว");
     }
   };
 
   // 🌟 Premium Skeleton Loading
   if (loading) {
     return (
-      <div className="min-h-screen bg-white max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <div className="min-h-screen bg-white max-w-300 mx-auto px-4 sm:px-6 py-8">
         <div className="h-6 w-32 bg-neutral-200 rounded-md animate-pulse mb-6"></div>
         <div className="h-10 w-3/4 bg-neutral-200 rounded-lg animate-pulse mb-4"></div>
         <div className="flex gap-4 mb-8">
@@ -179,13 +209,13 @@ export default function DestinationDetail() {
   if (error || !destination) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-4">
-        <div className="bg-white p-10 rounded-[2rem] shadow-sm border border-neutral-100 text-center max-w-md w-full">
+        <div className="bg-white p-10 rounded-4xl shadow-sm border border-neutral-100 text-center max-w-md w-full">
           <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
             🥲
           </div>
           <h2 className="text-2xl font-bold text-neutral-900 mb-2">เกิดข้อผิดพลาด</h2>
           <p className="text-neutral-500 mb-8 leading-relaxed">{error || "ไม่พบข้อมูลสถานที่"}</p>
-          <Link href="/dashboard" className="inline-flex items-center justify-center w-full px-8 py-3.5 bg-neutral-900 text-white font-semibold rounded-full hover:bg-black transition-colors shadow-lg shadow-neutral-900/20 active:scale-95">
+          <Link href="/destinations" className="inline-flex items-center justify-center w-full px-8 py-3.5 bg-neutral-900 text-white font-semibold rounded-full hover:bg-black transition-colors shadow-lg shadow-neutral-900/20 active:scale-95">
             กลับไปหน้าหลัก
           </Link>
         </div>
@@ -206,10 +236,10 @@ export default function DestinationDetail() {
       
       {/* 🌟 Top Navigation */}
       <nav className="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-neutral-100/80 transition-all">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition font-medium group">
+        <div className="max-w-300 mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <Link href="/destinations" className="inline-flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition font-medium group">
             <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-neutral-100 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4" />
             </div>
             <span className="hidden sm:block">กลับไปหน้ารวมสถานที่</span>
           </Link>
@@ -228,7 +258,7 @@ export default function DestinationDetail() {
         </div>
       </nav>
 
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-300 mx-auto px-4 sm:px-6 py-8">
         
         {/* 🌟 Header Section */}
         <div className="mb-6">
@@ -252,7 +282,7 @@ export default function DestinationDetail() {
             {destination.location && (
               <div className="flex items-center gap-1 underline cursor-pointer hover:text-neutral-500 before:content-['·'] before:mr-2 before:text-neutral-300 before:no-underline">
                 <MapPin className="w-4 h-4 shrink-0" />
-                <span className="truncate max-w-[200px] sm:max-w-none">{destination.location}</span>
+                <span className="truncate max-w-50 sm:max-w-none">{destination.location}</span>
               </div>
             )}
           </div>
@@ -299,7 +329,7 @@ export default function DestinationDetail() {
               {destination.description || "สัมผัสประสบการณ์การท่องเที่ยวที่น่าประทับใจไปกับสถานที่แห่งนี้ (ยังไม่มีข้อมูลรายละเอียดเพิ่มเติม)"}
             </div>
             
-            {/* Mockup Features (สามารถนำข้อมูลจริงมา map ได้ในอนาคต) */}
+            {/* Mockup Features */}
             <h2 className="text-2xl font-bold text-neutral-900 mb-6 pb-4 border-b border-neutral-200">
               ไฮไลท์ที่น่าสนใจ
             </h2>
@@ -400,7 +430,7 @@ export default function DestinationDetail() {
                       key={review.id} 
                       className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] group relative"
                     >
-                      {userId === review.created_by && (
+                      {user?.id === review.created_by && (
                         <button 
                           onClick={() => handleDeleteReview(review.id)} 
                           className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full transition opacity-0 group-hover:opacity-100" 
@@ -412,7 +442,7 @@ export default function DestinationDetail() {
 
                       <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 bg-neutral-900 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-sm">
-                          {review.created_by?.substring(0, 1).toUpperCase() || "U"}
+                          U
                         </div>
                         <div>
                           <div className="font-bold text-neutral-900">นักท่องเที่ยวไม่ระบุนาม</div>
@@ -442,7 +472,7 @@ export default function DestinationDetail() {
             {/* ฝั่งขวา: Write Review Form */}
             <div className="lg:col-span-5 order-1 lg:order-2">
               <div className="bg-neutral-50 p-8 rounded-3xl border border-neutral-100 sticky top-28">
-                {userId ? (
+                {user ? (
                   <form onSubmit={handleSubmitReview}>
                     <h3 className="text-xl font-bold text-neutral-900 mb-6 flex items-center gap-2">
                       <MessageSquare className="w-5 h-5 text-neutral-400" />
@@ -493,7 +523,7 @@ export default function DestinationDetail() {
                     <h3 className="text-lg font-bold text-neutral-900 mb-2">เข้าสู่ระบบเพื่อรีวิว</h3>
                     <p className="text-neutral-500 mb-6 text-sm">คุณจำเป็นต้องเข้าสู่ระบบเพื่อแชร์ประสบการณ์การเดินทางของคุณ</p>
                     <Link 
-                      href="/sign-in" 
+                      href={`/sign-in?redirect_url=${encodeURIComponent(pathname)}`}
                       className="inline-block px-6 py-3.5 bg-neutral-900 text-white font-bold rounded-full w-full hover:bg-black transition shadow-md"
                     >
                       เข้าสู่ระบบ / สมัครสมาชิก

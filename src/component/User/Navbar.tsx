@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
+import { usePathname, useRouter } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
-import { Compass, Search, Menu, X } from "lucide-react";
+import {
+  Compass,
+  Search,
+  Menu,
+  X,
+  Loader2,
+  LogOut,
+  UserRound,
+} from "lucide-react";
+import Image from "next/image";
+import { ProfileModal } from "../ProfileModal";
 
 const navItems = [
   { name: "หน้าแรก", href: "/dashboard" },
@@ -17,28 +28,97 @@ const navItems = [
 ];
 
 // ─── Pages ที่มี hero เข้ม (เริ่มต้นด้วย glass mode) ─────────────────────────
-const HERO_PAGES = ["/", "/dashboard", "/destinations", "/restaurant", "/accommodations", "/trips"];
+const HERO_PAGES = [
+  "/",
+  "/dashboard",
+  "/destinations",
+  "/restaurant",
+  "/accommodations",
+  "/trips",
+];
 
-export default function Navbar() {
+export const Navbar = () => {
   const pathname = usePathname();
-  const { isSignedIn } = useUser();
+  const router = useRouter();
 
+  // ─── UI State ──────────────────────────────────────────────────────────────
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // ─── Auth State ────────────────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
 
   // ตรวจสอบว่าหน้านี้มี hero สีเข้มไหม
-  const hasHero = HERO_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const hasHero = HERO_PAGES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
 
-  // ── Scroll listener ────────────────────────────────────────────────────────
+  // ─── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll(); // เช็คทันทีเมื่อ mount
+    onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-  // ── ตัดสินใจ theme ────────────────────────────────────────────────────────
-  // glass = บน hero ยังไม่ scroll | solid = scroll แล้ว หรือหน้าที่ไม่มี hero
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setLoading(false);
+    };
+
+    fetchSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ─── Handlers ──────────────────────────────────────────────────────────────
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setDropdownOpen(false);
+    setMobileOpen(false);
+    router.push("/");
+    router.refresh();
+  };
+
+  // ตัดสินใจ theme: glass = บน hero ยังไม่ scroll | solid = scroll แล้ว หรือหน้าที่ไม่มี hero
   const isGlass = hasHero && !scrolled;
+
+  // ─── Extract User Metadata ─────────────────────────────────────────────────
+  const avatarUrl =
+    user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+  const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name;
 
   return (
     <>
@@ -52,66 +132,68 @@ export default function Navbar() {
         <div
           className={`
             mx-auto transition-all duration-300 ease-out
-            ${scrolled
-              ? "max-w-full px-0 pt-0"
-              : "max-w-7xl px-4 pt-4"
-            }
+            ${scrolled ? "max-w-full px-0 pt-0" : "max-w-7xl px-4 pt-4"}
           `}
         >
           <div
             className={`
-              flex items-center justify-between
-              px-4 lg:px-6
-              transition-all duration-300 ease-out
-              ${scrolled
-                ? // Solid white mode หลัง scroll
-                  "h-14 bg-white border-b border-slate-200/80 shadow-sm rounded-none"
-                : // Glassmorphism mode บน hero
-                  "h-14 bg-white/10 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.16)] rounded-full"
+              flex h-14 items-center justify-between px-4 transition-all duration-300 ease-out lg:px-6
+              ${
+                scrolled
+                  ? "rounded-none border-b border-slate-200/80 bg-white shadow-sm"
+                  : "rounded-full border border-white/20 bg-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.16)] backdrop-blur-2xl"
               }
             `}
           >
             {/* ── Logo ──────────────────────────────────────────────────── */}
-            <Link href="/" className="flex items-center gap-3 shrink-0 group">
-              <div className="w-9 h-9 rounded-full bg-linear-to-br from-amber-300 to-yellow-500 flex items-center justify-center shadow-md">
-                <Compass className="w-4.5 h-4.5 text-white transition-transform duration-700 group-hover:rotate-180" />
+            <Link href="/" className="group flex shrink-0 items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden">
+                <Image
+                  src="/images/logo-travel.png"
+                  alt="เที่ยวตามงบโคราช"
+                  width={36}
+                  height={36}
+                  className="h-full w-full object-cover"
+                  priority
+                />
               </div>
-              <div className="hidden sm:block">
+
+              <div className="hidden sm:flex flex-col leading-tight">
                 <span
-                  className={`font-bold text-base tracking-wide transition-colors duration-300 ${
+                  className={`text-base font-bold tracking-wide transition-colors duration-300 ${
                     isGlass ? "text-white" : "text-slate-800"
                   }`}
                 >
-                  เที่ยวตาม
-                  <span className="text-amber-400">งบ</span>
+                  เที่ยวตามงบ<span className="text-amber-400">โคราช</span>
                 </span>
               </div>
             </Link>
 
             {/* ── Desktop menu ───────────────────────────────────────────── */}
-            <ul className="hidden lg:flex items-center gap-1">
+            <ul className="hidden items-center gap-1 lg:flex">
               {navItems.map((item) => {
                 const isActive =
                   item.href === "/dashboard"
                     ? pathname === item.href
-                    : pathname === item.href || pathname.startsWith(item.href + "/");
+                    : pathname === item.href ||
+                      pathname.startsWith(item.href + "/");
 
                 return (
                   <li key={item.name} className="relative">
                     <Link
                       href={item.href}
                       className={`
-                        relative flex items-center gap-1
-                        px-3.5 py-2 rounded-full
-                        text-sm font-medium
+                        relative flex items-center gap-1 rounded-full px-3.5
+                        py-2 text-sm font-medium
                         transition-all duration-200
-                        ${isGlass
-                          ? isActive
-                            ? "text-white"
-                            : "text-white/70 hover:text-white hover:bg-white/10"
-                          : isActive
-                          ? "text-slate-900"
-                          : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                        ${
+                          isGlass
+                            ? isActive
+                              ? "text-white"
+                              : "text-white/70 hover:bg-white/10 hover:text-white"
+                            : isActive
+                              ? "text-slate-900"
+                              : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                         }
                       `}
                     >
@@ -119,12 +201,17 @@ export default function Navbar() {
                       {isActive && (
                         <motion.span
                           layoutId="navbar-pill"
-                          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 380,
+                            damping: 30,
+                          }}
                           className={`
-                            absolute inset-0 rounded-full -z-10
-                            ${isGlass
-                              ? "bg-white/15 border border-white/20"
-                              : "bg-slate-100"
+                            absolute inset-0 -z-10 rounded-full
+                            ${
+                              isGlass
+                                ? "border border-white/20 bg-white/15"
+                                : "bg-slate-100"
                             }
                           `}
                         />
@@ -142,27 +229,28 @@ export default function Navbar() {
                 type="button"
                 aria-label="ค้นหา"
                 className={`
-                  hidden sm:flex w-9 h-9 rounded-full
-                  items-center justify-center
-                  transition-all duration-200
-                  ${isGlass
-                    ? "bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white"
-                    : "bg-slate-100 border border-transparent text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+                  hidden h-9 w-9 items-center
+                  justify-center rounded-full transition-all
+                  duration-200 sm:flex
+                  ${
+                    isGlass
+                      ? "border border-white/20 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                      : "border border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-800"
                   }
                 `}
               >
-                <Search className="w-4 h-4" />
+                <Search className="h-4 w-4" />
               </button>
 
               {/* Auth capsule */}
               <div
                 className={`
-                  flex items-center gap-2.5
-                  px-3 py-1.5 rounded-full
-                  transition-all duration-200
-                  ${isGlass
-                    ? "bg-white/10 border border-white/20 hover:bg-white/15"
-                    : "bg-slate-100 border border-slate-200 hover:bg-slate-200"
+                  flex items-center gap-2.5 rounded-full px-2
+                  py-1.5 transition-all duration-200
+                  ${
+                    isGlass
+                      ? "border border-white/20 bg-white/10 hover:bg-white/15"
+                      : "border border-slate-200 bg-slate-100 hover:bg-slate-200"
                   }
                 `}
               >
@@ -172,50 +260,131 @@ export default function Navbar() {
                   aria-label={mobileOpen ? "ปิดเมนู" : "เปิดเมนู"}
                   onClick={() => setMobileOpen((v) => !v)}
                   className={`
-                    lg:hidden transition-colors duration-200
-                    ${isGlass ? "text-white/80 hover:text-white" : "text-slate-500 hover:text-slate-800"}
+                    transition-colors duration-200 lg:hidden
+                    ${
+                      isGlass
+                        ? "text-white/80 hover:text-white"
+                        : "text-slate-500 hover:text-slate-800"
+                    }
                   `}
                 >
-                  {mobileOpen
-                    ? <X className="w-4 h-4" />
-                    : <Menu className="w-4 h-4" />
-                  }
+                  {mobileOpen ? (
+                    <X className="h-4 w-4" />
+                  ) : (
+                    <Menu className="h-4 w-4" />
+                  )}
                 </button>
 
                 {/* Divider — mobile only */}
                 <div
-                  className={`lg:hidden w-px h-4 ${isGlass ? "bg-white/20" : "bg-slate-300"}`}
+                  className={`h-4 w-px lg:hidden ${
+                    isGlass ? "bg-white/20" : "bg-slate-300"
+                  }`}
                 />
 
                 {/* Auth */}
-                {isSignedIn ? (
-                  <UserButton
-                    appearance={{
-                      elements: {
-                        userButtonAvatarBox: "w-7 h-7",
-                      },
-                    }}
-                  />
-                ) : (
-                  <SignInButton mode="modal">
+                {loading ? (
+                  <div className="flex h-7 w-7 items-center justify-center">
+                    <Loader2
+                      className={`h-4 w-4 animate-spin ${
+                        isGlass ? "text-white" : "text-slate-400"
+                      }`}
+                    />
+                  </div>
+                ) : user ? (
+                  <div className="relative" ref={dropdownRef}>
                     <button
-                      type="button"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
                       className={`
-                        text-sm font-semibold transition-colors duration-200
-                        ${isGlass
-                          ? "text-white hover:text-amber-300"
-                          : "text-slate-700 hover:text-amber-500"
+                        flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border text-xs font-bold uppercase transition-colors
+                        ${
+                          isGlass
+                            ? "border-transparent bg-white text-emerald-600 hover:border-amber-300"
+                            : "border-transparent bg-emerald-100 text-emerald-700 hover:border-emerald-300"
                         }
                       `}
                     >
-                      เข้าสู่ระบบ
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={fullName || "User Avatar"}
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        user.email?.charAt(0) || "U"
+                      )}
                     </button>
-                  </SignInButton>
+
+                    {/* Desktop User Dropdown */}
+                    <AnimatePresence>
+                      {dropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute right-0 top-full mt-3 hidden w-56 rounded-2xl border border-slate-100 bg-white py-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] lg:block"
+                        >
+                          <div className="mb-1 border-b border-slate-100 px-4 py-2">
+                            <p className="text-xs font-medium text-slate-400">
+                              เข้าสู่ระบบด้วย
+                            </p>
+                            {fullName && (
+                              <p className="truncate text-sm font-semibold text-slate-800">
+                                {fullName}
+                              </p>
+                            )}
+                            <p
+                              className={`truncate text-sm text-slate-600 ${
+                                !fullName && "font-semibold text-slate-800"
+                              }`}
+                            >
+                              {user.email}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setDropdownOpen(false);
+                              setIsProfileModalOpen(true);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-emerald-600"
+                          >
+                            <UserRound className="h-4 w-4" /> โปรไฟล์
+                          </button>
+                          <button
+                            onClick={handleSignOut}
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            <LogOut className="h-4 w-4" /> ออกจากระบบ
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <Link
+                    href="/sign-in"
+                    className={`
+                      px-1 text-sm font-semibold transition-colors duration-200
+                      ${
+                        isGlass
+                          ? "text-white hover:text-amber-300"
+                          : "text-slate-700 hover:text-amber-500"
+                      }
+                    `}
+                  >
+                    เข้าสู่ระบบ
+                  </Link>
                 )}
               </div>
             </div>
           </div>
         </div>
+        <ProfileModal
+                        isOpen={isProfileModalOpen}
+                        onClose={() => setIsProfileModalOpen(false)}
+                      />
       </motion.nav>
 
       {/* ── Mobile drawer ──────────────────────────────────────────────────── */}
@@ -230,7 +399,7 @@ export default function Navbar() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setMobileOpen(false)}
-              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden"
             />
 
             {/* Drawer panel */}
@@ -240,13 +409,17 @@ export default function Navbar() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 320, damping: 32 }}
-              className="fixed top-0 right-0 bottom-0 z-50 w-72 bg-white shadow-2xl lg:hidden flex flex-col"
+              className="fixed bottom-0 right-0 top-0 z-50 flex w-72 flex-col bg-white shadow-2xl lg:hidden"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 h-16 border-b border-slate-100">
-                <Link href="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-amber-300 to-yellow-500 flex items-center justify-center">
-                    <Compass className="w-4 h-4 text-white" />
+              <div className="flex h-16 items-center justify-between border-b border-slate-100 px-5">
+                <Link
+                  href="/"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2.5"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-yellow-500">
+                    <Compass className="h-4 w-4 text-white" />
                   </div>
                   <span className="font-bold text-slate-800">
                     เที่ยวตาม<span className="text-amber-400">งบ</span>
@@ -256,9 +429,9 @@ export default function Navbar() {
                   type="button"
                   onClick={() => setMobileOpen(false)}
                   aria-label="ปิดเมนู"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
@@ -269,7 +442,8 @@ export default function Navbar() {
                     const isActive =
                       item.href === "/dashboard"
                         ? pathname === item.href
-                        : pathname === item.href || pathname.startsWith(item.href + "/");
+                        : pathname === item.href ||
+                          pathname.startsWith(item.href + "/");
 
                     return (
                       <motion.li
@@ -282,12 +456,13 @@ export default function Navbar() {
                           href={item.href}
                           onClick={() => setMobileOpen(false)}
                           className={`
-                            flex items-center justify-between
-                            px-4 py-3 rounded-xl text-sm font-medium
+                            flex items-center justify-between rounded-xl px-4
+                            py-3 text-sm font-medium
                             transition-all duration-150
-                            ${isActive
-                              ? "bg-amber-50 text-amber-700"
-                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                            ${
+                              isActive
+                                ? "bg-amber-50 text-amber-700"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                             }
                           `}
                         >
@@ -299,23 +474,63 @@ export default function Navbar() {
                 </ul>
               </nav>
 
-              {/* Drawer footer */}
-              {!isSignedIn && (
-                <div className="p-4 border-t border-slate-100">
-                  <SignInButton mode="modal">
+              {/* Drawer footer (Auth) */}
+              <div className="border-t border-slate-100 bg-slate-50/50 p-4">
+                {loading ? (
+                  <div className="flex justify-center py-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-amber-500" />
+                  </div>
+                ) : user ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Profile"
+                          className="h-10 w-10 shrink-0 rounded-full border border-slate-100 object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold uppercase text-emerald-700">
+                          {user.email?.charAt(0) || "U"}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-0.5 text-[11px] font-medium text-slate-400">
+                          เข้าสู่ระบบแล้ว
+                        </p>
+                        {fullName && (
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {fullName}
+                          </p>
+                        )}
+                        <p className="truncate text-xs text-slate-500">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
                     <button
-                      type="button"
-                      className="w-full py-3 bg-amber-400 hover:bg-amber-500 text-white font-semibold rounded-xl text-sm transition-colors"
+                      onClick={handleSignOut}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100"
                     >
-                      เข้าสู่ระบบ / สมัครสมาชิก
+                      <LogOut className="h-4 w-4" />
+                      ออกจากระบบ
                     </button>
-                  </SignInButton>
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <Link
+                    href="/sign-in"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex w-full items-center justify-center rounded-xl bg-amber-400 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-500"
+                  >
+                    เข้าสู่ระบบ / สมัครสมาชิก
+                  </Link>
+                )}
+              </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
     </>
   );
-}
+};

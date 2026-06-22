@@ -1,22 +1,49 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { generalApiRateLimit } from "@/lib/rate-limit";
 
-/**
- * GET /api/destinations/[id]
- */
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
+// ─── Helper: ดึงข้อมูล User จาก Supabase ──────────────────────────────────────
+
+export const getSessionUser = async () => {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: () => {}, // ห้าม set cookie ใน API Route
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return user;
+};
+
+// ─── GET /api/destinations/[id] (Public) ─────────────────────────────────────
+
+export const GET = async (request: NextRequest, { params }: RouteParams) => {
   try {
-    const { id } = await context.params;
+    const { id } = await params;
     const destinationId = Number(id);
 
     if (isNaN(destinationId)) {
-      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid ID format" }, { status: 400 });
     }
 
+    // ใช้ Public Client สำหรับการอ่านข้อมูลทั่วไป
     const { data, error } = await supabaseAdmin
       .from("destinations")
       .select("*")
@@ -24,63 +51,67 @@ export async function GET(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      console.error(`❌ GET destination ${id} error:`, error.message);
+      return NextResponse.json({ error: "Destination not found" }, { status: 404 });
     }
 
-    return NextResponse.json(data);
-  } catch {
+    return NextResponse.json(data, { status: 200 });
+  } catch (error) {
+    console.error("❌ GET Internal error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
     );
   }
-}
+};
 
-/**
- * helper
- */
-async function checkAdmin(userId: string) {
-  const { data: profile, error } = await supabaseAdmin
-    .from("users")
-    .select("role")
-    .eq("id", userId)
-    .single();
+// ─── PUT /api/destinations/[id] (Admin Only) ─────────────────────────────────
 
-  return !error && profile?.role === "admin";
-}
-
-/**
- * PUT /api/destinations/[id]
- */
-export async function PUT(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export const PUT = async (request: NextRequest, { params }: RouteParams) => {
   try {
-    const { userId } = await auth();
+    const user = await getSessionUser();
 
-    if (!userId) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!(await checkAdmin(userId))) {
+    // ป้องกันการยิง API รัวๆ เพื่อโจมตีระบบอัปเดต
+    const { success } = await generalApiRateLimit.limit(`put_destination_${user.id}`);
+    if (!success) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    // 🔥 ตรวจสอบสิทธิ์ Admin แบบ Zero-Latency จาก Token
+    const isAdmin = user.app_metadata?.role === "admin";
+    if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden: Admin only" },
         { status: 403 }
       );
     }
 
-    const { id } = await context.params;
+    const { id } = await params;
     const destinationId = Number(id);
 
     if (isNaN(destinationId)) {
-      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid ID format" }, { status: 400 });
     }
 
-    const body = await request.json();
-    const { name, description, category, image_url, min_price, max_price } =
-      body;
+    // ป้องกัน JSON Parse Error
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
+    if (typeof body !== "object" || body === null) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const { name, description, category, image_url, min_price, max_price } = body as Record<string, any>;
+
+    // ใช้ Admin Client สำหรับการแก้ไขข้อมูลโดย Admin
     const { data, error } = await supabaseAdmin
       .from("destinations")
       .update({
@@ -90,7 +121,7 @@ export async function PUT(
         image_url: image_url || null,
         min_price: Number(min_price) || 0,
         max_price: Number(max_price) || 0,
-        updated_by: userId,
+        updated_by: user.id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", destinationId)
@@ -98,44 +129,50 @@ export async function PUT(
       .single();
 
     if (error) {
+      console.error(`❌ PUT destination ${id} error:`, error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data);
-  } catch {
+    return NextResponse.json(data, { status: 200 });
+  } catch (error) {
+    console.error("❌ PUT Internal error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
     );
   }
-}
+};
 
-/**
- * DELETE /api/destinations/[id]
- */
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+// ─── DELETE /api/destinations/[id] (Admin Only) ──────────────────────────────
+
+export const DELETE = async (request: NextRequest, { params }: RouteParams) => {
   try {
-    const { userId } = await auth();
+    const user = await getSessionUser();
 
-    if (!userId) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!(await checkAdmin(userId))) {
+    // ป้องกันการสแปมยิง API ลบข้อมูล
+    const { success } = await generalApiRateLimit.limit(`delete_destination_${user.id}`);
+    if (!success) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
+
+    // 🔥 ตรวจสอบสิทธิ์ Admin
+    const isAdmin = user.app_metadata?.role === "admin";
+    if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden: Admin only" },
         { status: 403 }
       );
     }
 
-    const { id } = await context.params;
+    const { id } = await params;
     const destinationId = Number(id);
 
     if (isNaN(destinationId)) {
-      return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid ID format" }, { status: 400 });
     }
 
     const { error } = await supabaseAdmin
@@ -144,14 +181,16 @@ export async function DELETE(
       .eq("id", destinationId);
 
     if (error) {
+      console.error(`❌ DELETE destination ${id} error:`, error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ message: "Deleted successfully" });
-  } catch {
+    return NextResponse.json({ message: "Deleted successfully", id: destinationId }, { status: 200 });
+  } catch (error) {
+    console.error("❌ DELETE Internal error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
     );
   }
-}
+};

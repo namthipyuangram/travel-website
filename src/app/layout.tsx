@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Prompt } from "next/font/google";
 import "./globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
-import { Toaster } from "react-hot-toast"; // ✅ เพิ่มตรงนี้
+import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,27 +13,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const prompt = Prompt({
+  subsets: ["thai", "latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-prompt",
+});
+
 export const metadata: Metadata = {
-  title: "Travel Explorer",
+  title: "เที่ยวตามงบ",
   description: "ค้นพบสถานที่ท่องเที่ยวใหม่ ๆ ทั่วโลก",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <ClerkProvider>
-      <html lang="th">
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        >
-          {/* ส่วนเนื้อหาหลักของแต่ละหน้า */}
-          <main>{children}</main>
-          <Toaster position="top-right" />
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="th" className={prompt.variable}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <main className="font-sans">{children}</main>
+        <Toaster position="top-right" />
+      </body>
+    </html>
   );
 }

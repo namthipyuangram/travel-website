@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { supabaseClient } from "@/lib/supabaseClient";
-import Navbar from "@/component/User/Navbar";
+import { createSupabaseClient } from "@/lib/supabaseClient";
+import {Navbar} from "@/component/User/Navbar";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, Variants } from "framer-motion";
@@ -107,7 +107,7 @@ export default function AccommodationsPage() {
         setLoading(true);
         setError(null);
 
-        const { data, error: fetchError } = await supabaseClient
+        const { data, error: fetchError } = await createSupabaseClient()
           .from("accommodations")
           .select("*")
           .order("created_at", { ascending: false });
@@ -170,7 +170,7 @@ export default function AccommodationsPage() {
       <Navbar />
 
       {/* 🌟 Hero Banner Section */}
-      <div className="relative w-full min-h-[400px] md:min-h-[500px] lg:min-h-[55vh] bg-neutral-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
+      <div className="relative w-full min-h-[400px] md:min-h-[500px] bg-neutral-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
         <div 
           className="absolute inset-0 bg-cover bg-center transition-transform duration-[20s] hover:scale-110 ease-linear"
           style={{ backgroundImage: "url('/images/banner3.png')" }} 

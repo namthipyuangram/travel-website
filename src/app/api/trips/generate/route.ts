@@ -1,4 +1,4 @@
-import { supabaseClient } from "@/lib/supabaseClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { NextResponse } from "next/server";
 
 // Helper สำหรับสลับตำแหน่ง Array (Shuffle)
@@ -14,7 +14,7 @@ function shuffleArray<T>(array: T[]): T[] {
 // Helper สำหรับเช็คและดึงข้อมูล Fallback (ถ้างบน้อยไปจนดึงข้อมูลได้ไม่ถึง 5 อัน)
 async function getItemsWithFallback(tableName: string, maxBudget: number, limitCount: number = 5) {
   // 1. ดึงตามงบปกติ
-  const { data: primaryData, error: primaryError } = await supabaseClient
+  const { data: primaryData, error: primaryError } = await supabaseAdmin
     .from(tableName)
     .select("*")
     .lte("min_price", maxBudget)
@@ -26,7 +26,7 @@ async function getItemsWithFallback(tableName: string, maxBudget: number, limitC
 
   // 2. ถ้าได้ข้อมูลมาน้อยกว่าที่ต้องการ ให้ไปดึงของถูกที่สุดมาเติม (Fallback)
   if (results.length < limitCount) {
-    const { data: fallbackData } = await supabaseClient
+    const { data: fallbackData } = await supabaseAdmin
       .from(tableName)
       .select("*")
       .order("min_price", { ascending: true }) // เรียงจากถูกไปแพง

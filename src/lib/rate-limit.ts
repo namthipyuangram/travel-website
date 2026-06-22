@@ -21,3 +21,11 @@ export const generalApiRateLimit = new Ratelimit({
   prefix: "ratelimit:general",
   analytics: true,
 });
+
+export const authRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "15 m"),
+  analytics: true,
+  prefix: "@upstash/ratelimit/auth",
+});
+

@@ -1,18 +1,12 @@
 // src/component/User/DestinationList.tsx
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, Variants } from "framer-motion";
 import { Heart, Star, Tag, Wallet, Search, Images, SlidersHorizontal, X } from "lucide-react";
 import type { Destination } from "@/types/destination";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface DestinationRating {
-  avg: number;
-  count: number;
-}
 
 // ─── Framer Motion variants ───────────────────────────────────────────────────
 const containerVariants: Variants = {
@@ -68,9 +62,7 @@ function SkeletonCard() {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function DestinationList() {
   const [destinations, setDestinations] = useState<Destination[]>([]);
-  const [ratingsMap, setRatingsMap] = useState<Record<string, DestinationRating>>({});
   const [loading, setLoading] = useState(true);
-  const [ratingsLoading, setRatingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filter state
@@ -80,7 +72,7 @@ export default function DestinationList() {
   const [maxBudget, setMaxBudget] = useState<number | "">("");
   const [showBudget, setShowBudget] = useState(false);
 
-  // ── Fetch destinations ────────────────────────────────────────────────────
+  // ── Fetch destinations (ครั้งเดียวจบ ได้ข้อมูลครบพร้อม Rating) ───────────
   useEffect(() => {
     const timer = setTimeout(async () => {
       try {
@@ -91,6 +83,7 @@ export default function DestinationList() {
 
         const res = await fetch(`/api/destinations?${params.toString()}`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        
         const data: Destination[] = await res.json();
         setDestinations(data);
         setError(null);
@@ -103,51 +96,6 @@ export default function DestinationList() {
     }, 400);
     return () => clearTimeout(timer);
   }, [minBudget, maxBudget]);
-
-  // ── Fetch ratings — ใช้ ref แทน useCallback เพื่อหลีกเลี่ยง set-state-in-effect ────
-  const isFetchingRatings = useRef(false);
-
-  useEffect(() => {
-    // guard: ไม่ fetch ซ้ำถ้ายังรอผลอยู่ หรือไม่มี destinations
-    if (destinations.length === 0 || isFetchingRatings.current) return;
-
-    let cancelled = false;
-    isFetchingRatings.current = true;
-    setRatingsLoading(true);
-
-    Promise.all(
-      destinations.map((d) =>
-        fetch(`/api/reviews?destination_id=${d.id}`)
-          .then((r) => (r.ok ? r.json() : []))
-          .catch(() => [])
-      )
-    ).then((results) => {
-      if (cancelled) return;
-
-      const map: Record<string, DestinationRating> = {};
-      destinations.forEach((d, i) => {
-        const reviews: { rating: number }[] = results[i] ?? [];
-        if (reviews.length === 0) {
-          map[String(d.id)] = { avg: 0, count: 0 };
-        } else {
-          const avg = reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length;
-          map[String(d.id)] = {
-            avg: Math.round(avg * 10) / 10,
-            count: reviews.length,
-          };
-        }
-      });
-
-      setRatingsMap(map);
-      setRatingsLoading(false);
-      isFetchingRatings.current = false;
-    });
-
-    return () => {
-      cancelled = true;
-      isFetchingRatings.current = false;
-    };
-  }, [destinations]);
 
   // ── Client-side filter ────────────────────────────────────────────────────
   const filteredDestinations = destinations.filter((d) => {
@@ -174,25 +122,22 @@ export default function DestinationList() {
     setShowBudget(false);
   };
 
-const getFirstImageUrl = (data: any): string => {
-  if (!data) return "/images/default.jpg";
-  
-  try {
-    // 1. ถ้าเป็น String JSON เช่น '["url1", "url2"]'
-    if (typeof data === 'string' && data.startsWith('[')) {
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? (parsed[0] || "/images/default.jpg") : data;
+  const getFirstImageUrl = (data: any): string => {
+    if (!data) return "/images/default.jpg";
+    
+    try {
+      if (typeof data === 'string' && data.startsWith('[')) {
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? (parsed[0] || "/images/default.jpg") : data;
+      }
+      if (Array.isArray(data)) {
+        return data[0] || "/images/default.jpg";
+      }
+      return data;
+    } catch {
+      return data; 
     }
-    // 2. ถ้าเป็น Array ปกติ ['url1', 'url2']
-    if (Array.isArray(data)) {
-      return data[0] || "/images/default.jpg";
-    }
-    // 3. ถ้าเป็น String URL ปกติ (ข้อมูลเก่า)
-    return data;
-  } catch {
-    return data; // ถ้า Parse พลาด ให้ส่งกลับเป็น data เดิมไป
-  }
-};
+  };
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
@@ -246,7 +191,6 @@ const getFirstImageUrl = (data: any): string => {
             </p>
           </div>
 
-          {/* Search + budget toggle row */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {/* Search */}
             <div className="relative flex-1 sm:w-64">
@@ -372,8 +316,19 @@ const getFirstImageUrl = (data: any): string => {
           {filteredDestinations.map((d) => {
             const minPrice = d.min_price ?? 0;
             const maxPrice = d.max_price ?? 0;
-            const rating = ratingsMap[String(d.id)];
-            const imageCount = d.images?.length ?? 0;
+            
+            // ดึงข้อมูล Rating จากออบเจ็กต์ d ได้โดยตรงเลย 🚀
+            const rating = d.rating; 
+            
+            let imageCount = 0;
+            try {
+              const parsedImage = typeof d.image_url === 'string' && d.image_url.startsWith('[') 
+                ? JSON.parse(d.image_url) 
+                : d.image_url;
+              imageCount = Array.isArray(parsedImage) ? parsedImage.length : 1;
+            } catch {
+              imageCount = 1;
+            }
             const hasMultipleImages = imageCount > 1;
 
             return (
@@ -435,11 +390,9 @@ const getFirstImageUrl = (data: any): string => {
                         </p>
                       </div>
 
-                      {/* Rating row */}
+                      {/* Rating row (โหลดมาพร้อมข้อมูลแล้ว ไม่ต้องเช็ค ratingsLoading) */}
                       <div className="flex items-center gap-1.5 pt-2 border-t border-slate-50">
-                        {ratingsLoading && !rating ? (
-                          <div className="h-3 w-24 bg-slate-200/70 rounded-full animate-pulse" />
-                        ) : rating && rating.count > 0 ? (
+                        {rating && rating.count > 0 ? (
                           <>
                             <MiniStars rating={rating.avg} />
                             <span className="text-xs font-bold text-neutral-800">

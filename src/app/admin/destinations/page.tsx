@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import Image from "next/image";
-import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import type { Destination } from "@/types/destination";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -31,8 +32,16 @@ const CATEGORIES = [
 ] as const;
 
 export default function AdminDestinationsPage() {
-  const { user, isLoaded } = useUser();
   const router = useRouter();
+
+  // ─── Supabase Auth State ───────────────────────────────────────────────────
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   // ==================== STATES ====================
   const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -67,15 +76,24 @@ export default function AdminDestinationsPage() {
 
   // ==================== EFFECTS ====================
   useEffect(() => {
-    if (isLoaded) {
-      const role = user?.publicMetadata?.role as string | undefined;
+    const fetchSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setAuthLoaded(true);
+    };
+    fetchSession();
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    if (authLoaded) {
+      const role = user?.app_metadata?.role as string | undefined;
       if (role !== "admin") {
         router.push("/dashboard");
       } else {
         fetchDestinations();
       }
     }
-  }, [isLoaded, user, router]);
+  }, [authLoaded, user, router]);
 
   useEffect(() => {
     setPage(1);
@@ -204,11 +222,6 @@ export default function AdminDestinationsPage() {
     }
   };
 
-  const getImageUrl = (value: any) => {
-    const parsed = parseImageUrl(value);
-    return parsed.length > 0 ? parsed[0] : null;
-  };
-
   const handleImageProcessing = (file: File) => {
     const previewUrl = URL.createObjectURL(file);
     setImagePreview([previewUrl]);
@@ -250,7 +263,7 @@ export default function AdminDestinationsPage() {
   }, [destinations]);
 
   // ==================== RENDER ====================
-  if (!isLoaded || loading) {
+  if (!authLoaded || loading) {
     return (
       <main className="max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8 min-h-screen">
         <div className="flex justify-between items-center mb-8">
@@ -271,7 +284,7 @@ export default function AdminDestinationsPage() {
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex gap-5 p-5 bg-white border border-slate-100 rounded-2xl h-48 animate-pulse">
-              <div className="w-[240px] bg-slate-100 rounded-xl h-full flex-shrink-0"></div>
+              <div className="w-60 bg-slate-100 rounded-xl h-full flex-shrink-0"></div>
               <div className="flex-1 flex flex-col justify-between py-1">
                 <div>
                   <div className="h-4 w-32 bg-slate-100 rounded mb-3"></div>
@@ -285,6 +298,11 @@ export default function AdminDestinationsPage() {
         </div>
       </main>
     );
+  }
+
+  // หากโหลด Session เสร็จแล้วแต่ไม่ใช่แอดมิน (ป้องกันการกระพริบระหว่างรอ Redirect)
+  if (!user || user.app_metadata?.role !== "admin") {
+    return null; 
   }
 
   return (
@@ -405,7 +423,7 @@ export default function AdminDestinationsPage() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center min-h-[300px]"
+                className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-16 text-center flex flex-col items-center justify-center min-h-80"
               >
                 <div className="bg-slate-50 p-4 rounded-full mb-4">
                   <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -432,7 +450,7 @@ export default function AdminDestinationsPage() {
                     className="group bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-300 transition-all p-4 flex flex-col sm:flex-row gap-5"
                   >
                     {/* Image Container */}
-                    <div className="relative w-full sm:w-[240px] aspect-[16/10] flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                    <div className="relative w-full sm:w-60 aspect-[16/10] flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
                       {displayImgUrl ? (
                         <>
                           <Image src={displayImgUrl} alt={d.name} fill className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
@@ -627,18 +645,18 @@ export default function AdminDestinationsPage() {
 
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700">ชื่อสถานที่ <span className="text-red-500">*</span></label>
-                      <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="เช่น อุทยานแห่งชาติเขาใหญ่" className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
+                      <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="เช่น อุทยานแห่งชาติเขาใหญ่" className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700">คำอธิบายสถานที่ <span className="text-red-500">*</span></label>
-                      <textarea required rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="จุดเด่น สิ่งที่น่าสนใจ..." className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none resize-none" />
+                      <textarea required rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="จุดเด่น สิ่งที่น่าสนใจ..." className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none resize-none" />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">หมวดหมู่</label>
-                        <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value as Destination["category"] })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none bg-white">
+                        <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value as Destination["category"] })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none bg-white">
                           {CATEGORIES.filter((c) => c !== "ทั้งหมด").map((cat) => (
                             <option key={cat} value={cat}>{cat}</option>
                           ))}
@@ -649,11 +667,11 @@ export default function AdminDestinationsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">เริ่มต้น (บาท)</label>
-                        <input type="number" min="0" value={formData.min_price} onChange={(e) => setFormData({ ...formData, min_price: e.target.value })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
+                        <input type="number" min="0" value={formData.min_price} onChange={(e) => setFormData({ ...formData, min_price: e.target.value })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">สูงสุด (บาท)</label>
-                        <input type="number" min="0" value={formData.max_price} onChange={(e) => setFormData({ ...formData, max_price: e.target.value })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-[3px] focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
+                        <input type="number" min="0" value={formData.max_price} onChange={(e) => setFormData({ ...formData, max_price: e.target.value })} className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none" />
                       </div>
                     </div>
                   </form>
@@ -663,7 +681,7 @@ export default function AdminDestinationsPage() {
                   <button type="button" onClick={handleCloseModal} disabled={isSubmitting} className="px-6 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-50">
                     ยกเลิก
                   </button>
-                  <button form="destination-form" type="submit" disabled={isSubmitting} className="flex items-center justify-center px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-all min-w-[120px] disabled:opacity-70">
+                  <button form="destination-form" type="submit" disabled={isSubmitting} className="flex items-center justify-center px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-all min-w-32 disabled:opacity-70">
                     {isSubmitting ? (
                       <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

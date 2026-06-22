@@ -10,5 +10,9 @@ export interface Destination {
   min_price?: number;
   max_price?: number;
   image_url?: string;
-  images?: string[];   // ← เพิ่มบรรทัดนี้
+  images?: string[];  
+  rating?: {
+    avg: number;
+    count: number;
+  };
 }

@@ -1,38 +1,40 @@
 // src/app/admin/layout.tsx
-"use client";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { Sidebar } from "../../component/Admin/Sidebar"; // ✅ ใช้ Named Export ตามที่เราได้ Refactor ไว้
 
-import { useUser } from "@clerk/nextjs";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Sidebar from "../../component/Admin/Sidebar";
-
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoaded } = useUser();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isLoaded) {
-      const role = user?.publicMetadata?.role as string | undefined;
-      if (role !== "admin") {
-        router.push("/dashboard");
-      }
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const cookieStore = await cookies();
+  
+  // สร้าง Supabase Client สำหรับฝั่ง Server
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: () => {}, // Layout ไม่ควร set cookie โดยตรง ปล่อยให้ Middleware/Actions จัดการ
+      },
     }
-  }, [isLoaded, user, router]);
+  );
 
-  if (!isLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-200 border-t-emerald-600" />
-          <p className="text-sm text-slate-500">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
-  }
+  // ดึงข้อมูล User ปัจจุบัน (Zero-Trust Check)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const role = user?.publicMetadata?.role as string | undefined;
-  if (role !== "admin") {
-    return null;
+  // ตรวจสอบ Role จาก app_metadata
+  const role = user?.app_metadata?.role as string | undefined;
+
+  // หากไม่ใช่ Admin ให้เตะกลับไปหน้า Dashboard อัตโนมัติ (ไม่ต้องมีจังหวะกระพริบโหลด)
+  // *ถึงแม้ Middleware จะดักไว้แล้ว แต่การดักระดับ Layout ไว้ด้วยคือ Best Practice ด้านความปลอดภัย
+  if (!user || role !== "admin") {
+    redirect("/dashboard");
   }
 
   return (
