@@ -20,8 +20,8 @@ const prompt = Prompt({
 });
 
 export const metadata: Metadata = {
-  title: "เที่ยวตามงบ",
-  description: "ค้นพบสถานที่ท่องเที่ยวใหม่ ๆ ทั่วโลก",
+  title: "เที่ยวตามงบโคราช",
+  description: "ค้นพบสถานที่ท่องเที่ยวใหม่ ๆ ในโคราชที่คุณยังไม่ได้สัมผัส",
 };
 
 export default function RootLayout({
