@@ -10,14 +10,9 @@ import {
   ChevronRight,
   RefreshCcw,
   Trash2,
-  Pencil,
   CalendarDays,
-  Banknote,
   Plus,
   X,
-  CheckCircle2,
-  ChevronLeft,
-  ArrowLeft,
   Home,
   Loader2,
   Save
@@ -186,7 +181,7 @@ export function EditTripModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      className="fixed inset-0 z-80 flex items-end sm:items-center justify-center p-0 sm:p-6"
     >
       <motion.div
         className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm transition-opacity"
@@ -296,13 +291,13 @@ export function EditTripModal({
                                 className="group relative flex flex-col bg-white border border-neutral-100 rounded-2xl overflow-hidden hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:border-neutral-200 transition-all duration-300"
                               >
                                 {/* Image Section */}
-                                <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100 shrink-0">
+                                <div className="relative aspect-4/3 w-full overflow-hidden bg-neutral-100 shrink-0">
                                   <img
                                     src={getImageUrl(detail)}
                                     alt={detail.name}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                                   />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                                   
                                   {/* Floating Delete Button */}
                                   <button
@@ -644,9 +639,9 @@ export default function MyTripsPage() {
     <Navbar />
 
     {/* 🌟 Hero Banner Section */}
-    <div className="relative w-full min-h-[400px] md:min-h-[500px] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12 group">
+    <div className="relative w-full min-h-100 md:min-h-125 bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12 group">
       <div
-        className="absolute inset-0 bg-cover bg-center blur-[4px] scale-110 transition-transform duration-700 group-hover:scale-125"
+        className="absolute inset-0 bg-cover bg-center blur-xs scale-110 transition-transform duration-700 group-hover:scale-125"
         style={{ backgroundImage: "url('/images/banner-trip.png')" }}
       ></div>
 

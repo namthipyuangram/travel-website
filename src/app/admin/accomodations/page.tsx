@@ -326,7 +326,7 @@ export default function AdminAccommodationsPage() {
         >
           <div className="flex items-center gap-3">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br
     from-blue-600
     via-blue-500
     to-indigo-700
@@ -358,7 +358,7 @@ export default function AdminAccommodationsPage() {
     px-5 py-2.5
     text-sm font-semibold tracking-wide
     text-white
-    bg-gradient-to-br
+    bg-linear-to-br
     from-blue-600
     to-blue-500
     border border-white/10
@@ -371,7 +371,7 @@ export default function AdminAccommodationsPage() {
     flex items-center justify-center gap-2
   "
           >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-white/10" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/10 to-white/10" />
 
             <Plus
               size={16}
@@ -493,7 +493,7 @@ export default function AdminAccommodationsPage() {
                     key={i}
                     className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-5 animate-pulse"
                   >
-                    <div className="w-full sm:w-[240px] aspect-16/10 rounded-xl bg-slate-100 shrink-0" />
+                    <div className="w-full sm:w-60 aspect-16/10 rounded-xl bg-slate-100 shrink-0" />
                     <div className="flex-1 flex flex-col justify-between py-1 space-y-4">
                       <div className="space-y-2.5">
                         <div className="h-3.5 bg-slate-100 rounded w-1/3" />
@@ -546,7 +546,7 @@ export default function AdminAccommodationsPage() {
                       }`}
                     >
                       {/* ─── THUMBNAIL BLOCK ─── */}
-                      <div className="relative w-full sm:w-[240px] aspect-16/10 shrink-0 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/50 flex items-center justify-center">
+                      <div className="relative w-full sm:w-60 aspect-16/10 shrink-0 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/50 flex items-center justify-center">
                         {acc.images && acc.images.length > 0 ? (
                           <>
                             <img

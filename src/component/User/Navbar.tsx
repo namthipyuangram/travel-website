@@ -305,7 +305,9 @@ export const Navbar = () => {
                       `}
                     >
                       {avatarUrl ? (
-                        <img
+                        <Image
+                        height={40}
+                          width={40}
                           src={avatarUrl}
                           alt={fullName || "User Avatar"}
                           className="h-full w-full object-cover"
@@ -418,7 +420,7 @@ export const Navbar = () => {
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2.5"
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-yellow-500">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-amber-300 to-yellow-500">
                     <Compass className="h-4 w-4 text-white" />
                   </div>
                   <span className="font-bold text-slate-800">
@@ -484,7 +486,9 @@ export const Navbar = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
                       {avatarUrl ? (
-                        <img
+                        <Image
+                          width={40}
+                          height={40}
                           src={avatarUrl}
                           alt="Profile"
                           className="h-10 w-10 shrink-0 rounded-full border border-slate-100 object-cover"

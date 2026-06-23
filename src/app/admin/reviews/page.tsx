@@ -7,7 +7,6 @@ import type { User } from "@supabase/supabase-js";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
-  MessageSquare,
   Star,
   Trash2,
   MapPin,
@@ -385,7 +384,7 @@ export default function AdminReviewsPage() {
         </div>
 
         {/* Main Content Arena */}
-        <div className="min-h-[400px]">
+        <div className="min-h-100">
           <AnimatePresence mode="popLayout">
             {(!authLoaded || loading) ? (
               /* Premium Shimmer Skeleton Grid View */
@@ -561,7 +560,7 @@ export default function AdminReviewsPage() {
                 </div>
 
                 {/* Right Side Comments Interactive Panel */}
-                <div className="w-full md:w-[55%] flex flex-col bg-white h-[calc(90vh-30vh)] md:h-[80vh]">
+                <div className="w-full md:w-[55%] flex flex-col bg-white h-[60vh] md:h-[80vh]">
                   {/* Internal Sub-Header */}
                   <div className="p-4 border-b border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50/50">
                     <div className="min-w-0 pr-4">
@@ -609,7 +608,7 @@ export default function AdminReviewsPage() {
                                 {renderStars(r.rating, 10)}
                               </div>
                             </div>
-                            <p className="text-zinc-800 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                            <p className="text-zinc-800 text-sm leading-relaxed whitespace-pre-wrap wrap-break-words">
                               {r.comment || <span className="text-zinc-400 italic text-xs">ไม่มีข้อความประเมิน</span>}
                             </p>
                           </div>

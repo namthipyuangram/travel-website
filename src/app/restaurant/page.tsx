@@ -8,11 +8,11 @@ export default function RestaurantsPage() {
       <Navbar />
         
       {/* 🌟 1. Hero Banner Section */}
-      <div className="relative w-full min-h-[400px] md:min-h-[500px] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
+      <div className="relative w-full min-h-100 md:min-h-125 bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
         
         {/* 1. เบลอรูปพื้นหลัง: ใส่ blur-[4px] และ scale-110 เพื่อไม่ให้ขอบรูปตอนเบลอมันหด */}
         <div 
-          className="absolute inset-0 bg-cover bg-center blur-[4px] scale-110 transition-transform duration-700 hover:scale-125"
+          className="absolute inset-0 bg-cover bg-center blur-xs scale-110 transition-transform duration-700 hover:scale-125"
           style={{ backgroundImage: "url('/images/banner5.png')" }} 
         ></div>
         

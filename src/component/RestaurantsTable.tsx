@@ -97,7 +97,7 @@ export default function RestaurantsTable({ restaurants, onEdit, onDelete }: Rest
                 className="group bg-white border border-zinc-200 shadow-sm hover:border-blue-300 transition-all p-4 rounded-xl flex flex-col sm:flex-row gap-5 relative"
               >
                 {/* Image Container Block */}
-                <div className="relative w-full sm:w-[200px] aspect-[16/10] sm:h-[125px] flex-shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center">
+                <div className="relative w-full sm:w-50 aspect-16/10 sm:h-32 shrink-0 overflow-hidden rounded-lg bg-zinc-50 border border-zinc-100 flex items-center justify-center">
                   {imgData.primary ? (
                     <>
                       <img
@@ -173,7 +173,7 @@ export default function RestaurantsTable({ restaurants, onEdit, onDelete }: Rest
                       {r.location && (
                         <>
                           <span className="text-zinc-300">•</span>
-                          <span className="flex items-center gap-1 max-w-[200px] truncate">
+                          <span className="flex items-center gap-1 max-w-50 truncate">
                             <MapPin size={11} className="shrink-0" />
                             <span className="truncate">{r.location}</span>
                           </span>

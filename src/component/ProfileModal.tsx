@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { 
   UserRound, 
@@ -105,11 +105,11 @@ export const ProfileModal = ({ isOpen, onClose }: ProfileModalProps) => {
         </button>
 
         {isLoading ? (
-          <div className="flex min-h-[400px] items-center justify-center">
+          <div className="flex min-h-100 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
           </div>
         ) : !user ? (
-          <div className="flex min-h-[400px] items-center justify-center text-slate-500">
+          <div className="flex min-h-100 items-center justify-center text-slate-500">
             ไม่พบข้อมูลผู้ใช้งาน
           </div>
         ) : (

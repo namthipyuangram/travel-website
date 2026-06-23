@@ -7,15 +7,9 @@ import {
   type KeyboardEvent,
   type ClipboardEvent,
 } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  Mail,
-  Lock,
-  Loader2,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { signInAction, signUpAction, verifyOtpAction } from "@/actions/auth";
 import Link from "next/link";
@@ -62,9 +56,7 @@ export const AuthScreen = ({
   onSocialSignIn,
 }: AuthScreenProps) => {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirectUrl = searchParams?.get("redirect_url") || "/dashboard";
-
+  const [redirectUrl, setRedirectUrl] = useState("/dashboard");
   const [view, setView] = useState<AuthState>(defaultView);
   const [loading, setLoading] = useState(false);
   const [currentEmail, setCurrentEmail] = useState("");
@@ -77,6 +69,11 @@ export const AuthScreen = ({
   );
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setRedirectUrl(params.get("redirect_url") || "/dashboard");
+  }, []);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -289,7 +286,7 @@ export const AuthScreen = ({
           />
         </AnimatePresence>
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/60 via-black/20 to-transparent" />
 
         <div className="absolute bottom-16 left-16 right-16 text-white">
           <AnimatePresence mode="wait">
@@ -325,7 +322,7 @@ export const AuthScreen = ({
             className="absolute inset-0 h-full w-full object-cover opacity-50"
           />
         </AnimatePresence>
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/50 to-zinc-900/10" />
+        <div className="absolute inset-0 bg-linear-to-t from-zinc-900 via-zinc-900/50 to-zinc-900/10" />
         <div className="relative z-10 flex h-full flex-col justify-between p-5">
           <div className="flex items-center gap-1.5 text-white/90">
             <Image
@@ -429,14 +426,16 @@ export const AuthScreen = ({
                           onKeyDown={(e) => handleOtpKeyDown(i, e)}
                           onPaste={handleOtpPaste}
                           aria-label={`หลักที่ ${i + 1}`}
-                          className="aspect-square w-full max-w-[3.25rem] rounded-xl border border-zinc-200 text-center text-xl font-mono font-semibold outline-none transition-all focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/20 disabled:opacity-60"
+                          className="aspect-square w-full max-w-13 rounded-xl border border-zinc-200 text-center text-xl font-mono font-semibold outline-none transition-all focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/20 disabled:opacity-60"
                         />
                       ))}
                     </div>
                   </div>
 
                   <button
-                    disabled={loading || otpDigits.join("").length !== OTP_LENGTH}
+                    disabled={
+                      loading || otpDigits.join("").length !== OTP_LENGTH
+                    }
                     type="submit"
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-4 font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -465,9 +464,13 @@ export const AuthScreen = ({
                           : "font-medium text-zinc-900 underline-offset-4 hover:underline"
                       }
                     >
-                      {resendCooldown > 0
-                        ? <span suppressHydrationWarning>ส่งรหัสอีกครั้งใน {resendCooldown}s</span>
-                        : "ส่งรหัสอีกครั้ง"}
+                      {resendCooldown > 0 ? (
+                        <span suppressHydrationWarning>
+                          ส่งรหัสอีกครั้งใน {resendCooldown}s
+                        </span>
+                      ) : (
+                        "ส่งรหัสอีกครั้ง"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -568,7 +571,9 @@ export const AuthScreen = ({
                           autoCapitalize="none"
                           autoCorrect="off"
                           autoComplete={
-                            view === "login" ? "current-password" : "new-password"
+                            view === "login"
+                              ? "current-password"
+                              : "new-password"
                           }
                           placeholder={
                             view === "signup"
@@ -580,10 +585,13 @@ export const AuthScreen = ({
                             fieldErrors.password ? "password-error" : undefined
                           }
                           onChange={(e) => {
-                            let value = e.target.value.replace(/[ก-๙]/g, "").slice(0, 128);
+                            let value = e.target.value
+                              .replace(/[ก-๙]/g, "")
+                              .slice(0, 128);
                             setPassword(value);
                             if (!value) setShowPassword(false);
-                            if (fieldErrors.password) clearFieldError("password");
+                            if (fieldErrors.password)
+                              clearFieldError("password");
                           }}
                           onPaste={(e) => {
                             if (/[ก-๙]/.test(e.clipboardData.getData("text"))) {

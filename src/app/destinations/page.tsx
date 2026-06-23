@@ -9,7 +9,7 @@ export default function DestinationsPage() {
       <Navbar />
       
       {/* 🌟 1. Hero Banner Section */}
-      <div className="relative w-full min-h-[400px] md:min-h-[500px] lg:min-h-[60vh] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
+      <div className="relative w-full min-h-100 md:min-h-125 lg:min-h-[60vh] bg-gray-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
         
         {/* รูปพื้นหลัง */}
         <div 
@@ -20,7 +20,7 @@ export default function DestinationsPage() {
         {/* Overlay: เพิ่ม bg-black/50 ช่วยให้ตัวหนังสือโดดเด่นขึ้นบนรูปภาพที่สว่าง */}
         <div className="absolute inset-0 bg-black/50"></div>
         {/* แก้ไข: เปลี่ยน bg-linear-to-t เป็น bg-gradient-to-t ตามมาตรฐาน Tailwind */}
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
+        <div className="absolute inset-0 bg-linear-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
         
         {/* Content */}
         <div className="relative z-10 text-center px-4 md:px-8 w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-1000 mt-8">

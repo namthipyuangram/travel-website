@@ -6,11 +6,7 @@ import toast from "react-hot-toast";
 import {
   Search,
   ShieldCheck,
-  Users,
   Mail,
-  MonitorSmartphone,
-  CalendarDays,
-  Activity,
   Trash2,
   X,
   Copy,
@@ -21,7 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
-  UserCog,
   Shield,
   User,
 } from "lucide-react";
@@ -460,7 +455,7 @@ export default function AdminUsersPage() {
           </div>
 
           {/* Desktop Table */}
-          <div className="hidden md:block overflow-x-auto min-h-[400px]">
+          <div className="hidden md:block overflow-x-auto min-h-100">
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-transparent border-b border-zinc-200 text-zinc-500 text-xs font-medium">
                 <tr>
@@ -582,7 +577,7 @@ export default function AdminUsersPage() {
                           <div className="flex items-center gap-2.5">
                             <div className="relative">
                               <div
-                                className={`w-6 h-6 rounded bg-gradient-to-br ${getAvatarGradient(u.email)} flex items-center justify-center text-[10px] font-medium uppercase shrink-0`}
+                                className={`w-6 h-6 rounded bg-linear-to-br ${getAvatarGradient(u.email)} flex items-center justify-center text-[10px] font-medium uppercase shrink-0`}
                               >
                                 {u.email?.charAt(0)}
                               </div>
@@ -590,7 +585,7 @@ export default function AdminUsersPage() {
                                 <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border border-white rounded-full" />
                               )}
                             </div>
-                            <span className="font-medium text-zinc-900 truncate max-w-[200px]">
+                            <span className="font-medium text-zinc-900 truncate max-w-50">
                               {u.email}
                             </span>
                             <button
@@ -806,12 +801,12 @@ export default function AdminUsersPage() {
                         className="w-4 h-4 rounded-sm border-zinc-300 accent-blue-600 text-blue-600"
                       />
                       <div
-                        className={`w-8 h-8 rounded bg-gradient-to-br ${getAvatarGradient(u.email)} flex items-center justify-center text-[11px] font-medium uppercase shrink-0`}
+                        className={`w-8 h-8 rounded bg-linear-to-br ${getAvatarGradient(u.email)} flex items-center justify-center text-[11px] font-medium uppercase shrink-0`}
                       >
                         {u.email?.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-medium text-sm text-zinc-900 truncate max-w-[180px]">
+                        <p className="font-medium text-sm text-zinc-900 truncate max-w-45">
                           {u.email}
                         </p>
                         <p className="text-xs text-zinc-500">

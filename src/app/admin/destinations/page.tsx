@@ -468,7 +468,7 @@ export default function AdminDestinationsPage() {
         >
           <div className="flex items-center gap-3">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br
     from-blue-600
     via-blue-500
     to-indigo-700
@@ -499,7 +499,7 @@ export default function AdminDestinationsPage() {
     px-5 py-2.5
     text-sm font-semibold tracking-wide
     text-white
-    bg-gradient-to-br
+    bg-linear-to-br
     from-blue-600
     to-blue-500
     border border-white/10

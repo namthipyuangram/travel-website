@@ -1,5 +1,4 @@
 // src/app/page.tsx
-// ❌ ลบ "use client" ออกจากบรรทัดแรกสุด
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { Navbar } from "../component/User/Navbar";
@@ -7,7 +6,6 @@ import HeroSection from "../component/HeroSection";
 import BudgetTripPlannerWrapper from "@/component/BudgetTripPlanner";
 import Footer from "../component/Footer";
 
-// Server Component สามารถใช้ async/await ได้ปกติ
 export default async function HomePage() {
   const cookieStore = await cookies();
   

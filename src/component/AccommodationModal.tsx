@@ -92,7 +92,7 @@ export default function AccommodationModal({ accommodation, isOpen, onClose }: A
                   <button
                     key={index}
                     onClick={() => setSelectedImageIndex(index)}
-                    className={`flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 transition-all ${
+                    className={`shrink-0 w-24 h-24 rounded-lg overflow-hidden border-2 transition-all ${
                       selectedImageIndex === index
                         ? 'border-blue-600 ring-2 ring-blue-200'
                         : 'border-gray-200 hover:border-gray-400'

@@ -170,13 +170,13 @@ export default function AccommodationsPage() {
       <Navbar />
 
       {/* 🌟 Hero Banner Section */}
-      <div className="relative w-full min-h-[400px] md:min-h-[500px] bg-neutral-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
+      <div className="relative w-full min-h-100 md:min-h-125 bg-neutral-900 flex flex-col items-center justify-center overflow-hidden pt-20 pb-12">
         <div 
           className="absolute inset-0 bg-cover bg-center transition-transform duration-[20s] hover:scale-110 ease-linear"
           style={{ backgroundImage: "url('/images/banner3.png')" }} 
         />
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-neutral-900/40 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-neutral-900 via-neutral-900/40 to-transparent" />
         
         <div className="relative z-10 text-center px-4 md:px-8 w-full max-w-4xl mx-auto mt-8">
           <motion.h1 
@@ -198,7 +198,7 @@ export default function AccommodationsPage() {
         </div>
       </div>
 
-      <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 pb-24">
+      <main className="w-full max-w-350 mx-auto px-4 sm:px-6 pb-24">
         
         {/* 🌟 Breadcrumbs Navigation */}
         <nav aria-label="Breadcrumb" className="flex mt-6 mb-8">
@@ -306,7 +306,7 @@ export default function AccommodationsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 sm:gap-8 mt-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <div key={i} className="bg-white rounded-3xl p-3 shadow-sm border border-neutral-100 animate-pulse">
-                <div className="w-full aspect-[4/3] bg-neutral-200/80 rounded-2xl mb-5" />
+                <div className="w-full aspect-4/3 bg-neutral-200/80 rounded-2xl mb-5" />
                 <div className="px-2 space-y-4 pb-2">
                   <div className="h-5 bg-neutral-200/80 rounded-md w-3/4" />
                   <div className="space-y-2">
@@ -336,7 +336,7 @@ export default function AccommodationsPage() {
                   <div className="bg-white rounded-3xl p-3 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-neutral-100 hover:shadow-[0_20px_40px_rgba(0,0,0,0.08)] hover:-translate-y-2 transition-all duration-500 ease-out h-full flex flex-col relative z-10">
                     
                     {/* Image Section */}
-                    <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden mb-5 bg-neutral-100 shadow-inner">
+                    <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden mb-5 bg-neutral-100 shadow-inner">
                       <Image
                         src={getFirstImageUrl(acc.images)}
                         alt={acc.name}
@@ -345,7 +345,7 @@ export default function AccommodationsPage() {
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <div className="absolute inset-0 bg-linear-to-t from-black/40 via-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                       {/* Badge Top Left */}
                       <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-[0.7rem] font-bold text-neutral-900 shadow-[0_4px_12px_rgba(0,0,0,0.08)] flex items-center gap-1.5">
@@ -365,7 +365,7 @@ export default function AccommodationsPage() {
                     </div>
 
                     {/* Content Section */}
-                    <div className="px-3 pb-3 flex flex-col flex-grow">
+                    <div className="px-3 pb-3 flex flex-col grow">
                       <h4 className="text-lg font-bold text-neutral-900 line-clamp-1 mb-1.5 group-hover:text-blue-600 transition-colors">
                         {acc.name}
                       </h4>
@@ -376,7 +376,7 @@ export default function AccommodationsPage() {
                       <div className="pt-3.5 border-t border-neutral-100 flex items-center justify-between mt-auto">
                         <div className="flex items-center gap-1.5 text-neutral-500">
                           <MapPin className="w-4 h-4 opacity-70 text-blue-500" />
-                          <span className="text-sm font-medium truncate max-w-[120px] sm:max-w-[140px]">
+                          <span className="text-sm font-medium truncate max-w-30 sm:max-w-35">
                             {acc.address || "ไม่ระบุตำแหน่ง"}
                           </span>
                         </div>

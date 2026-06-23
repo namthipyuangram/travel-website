@@ -164,7 +164,7 @@ export default function RestaurantModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 font-sans">
+      <div className="fixed inset-0 z-100 flex items-center justify-center p-4 sm:p-6 font-sans">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -214,7 +214,7 @@ export default function RestaurantModal({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`relative flex flex-col items-center justify-center w-full min-h-[180px] p-2 transition-all border border-dashed rounded-lg cursor-pointer overflow-hidden
+                  className={`relative flex flex-col items-center justify-center w-full min-h-45 p-2 transition-all border border-dashed rounded-lg cursor-pointer overflow-hidden
                     ${
                       isDragging
                         ? "border-zinc-500 bg-zinc-100/80"
@@ -402,7 +402,7 @@ export default function RestaurantModal({
               form="restaurant-form"
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-[100px]"
+              className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-25"
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">

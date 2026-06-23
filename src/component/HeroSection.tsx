@@ -128,7 +128,7 @@ export default function HeroSection() {
   // Loading State
   if (isLoading) {
     return (
-      <div className="w-full h-screen min-h-[750px] bg-[#050505] flex items-center justify-center text-white">
+      <div className="w-full h-screen min-h-185 bg-[#050505] flex items-center justify-center text-white">
         <Loader2 className="w-10 h-10 animate-spin text-[#E5A93C]" />
       </div>
     );
@@ -137,7 +137,7 @@ export default function HeroSection() {
   // Fallback in case API fails or returns empty
   if (!destinations || destinations.length === 0) {
     return (
-      <div className="w-full h-screen min-h-[750px] bg-[#050505] flex items-center justify-center text-white">
+      <div className="w-full h-screen min-h-185 bg-[#050505] flex items-center justify-center text-white">
         <p>ไม่พบข้อมูลสถานที่ท่องเที่ยว</p>
       </div>
     );
@@ -146,7 +146,7 @@ export default function HeroSection() {
   const activeData = destinations[activeIdx];
 
   return (
-    <section className="relative w-full h-screen min-h-[750px] overflow-hidden bg-[#050505] text-white">
+    <section className="relative w-full h-screen min-h-185 overflow-hidden bg-[#050505] text-white">
       {/* 1. Background Layer */}
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         <AnimatePresence mode="popLayout">
@@ -167,8 +167,8 @@ export default function HeroSection() {
               }}
             />
             <div className="absolute inset-0 bg-black/40" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent w-full md:w-3/4" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent h-1/2 top-auto bottom-0" />
+            <div className="absolute inset-0 bg-linear-to-r from-black/90 via-black/40 to-transparent w-full md:w-3/4" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent h-1/2 top-auto bottom-0" />
           </motion.div>
         </AnimatePresence>
       </div>
@@ -223,7 +223,7 @@ export default function HeroSection() {
         {/* Right Content (Carousel Cards + Centered Controls) */}
         <div className="w-full md:w-1/2 flex flex-col items-center justify-center gap-10 mt-12 md:mt-0">
           {/* Card Carousel Wrapper */}
-          <div className="relative w-full max-w-[280px] md:max-w-[320px] lg:max-w-[360px] h-[380px] md:h-[450px] lg:h-[500px] [perspective:1000px]">
+          <div className="relative w-full max-w-70 md:max-w-[320px] lg:max-w-90 h-95 md:h-112 lg:h-125 perspective-[1000px]">
             {destinations.map((dest, i) => {
               const offset = i - activeIdx;
 
@@ -267,7 +267,7 @@ export default function HeroSection() {
                     rotateY: isActive ? 0 : -12 * normalizedOffset,
                   }}
                   transition={springTransition}
-                  className="absolute left-0 w-full aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl cursor-grab active:cursor-grabbing origin-center border border-white/10"
+                  className="absolute left-0 w-full aspect-3/4 rounded-3xl overflow-hidden shadow-2xl cursor-grab active:cursor-grabbing origin-center border border-white/10"
                   onClick={() => i !== activeIdx && setActiveIdx(i)}
                   drag="x"
                   dragConstraints={{ left: 0, right: 0 }}
@@ -282,7 +282,7 @@ export default function HeroSection() {
                     animate={{ scale: isActive ? 1 : 1.15 }}
                     transition={{ duration: 1.5 }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/10 to-transparent" />
 
                   <div className="absolute bottom-0 left-0 p-6 md:p-8 w-full">
                     <motion.div

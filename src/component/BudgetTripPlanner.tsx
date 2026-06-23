@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles, MapPin, Utensils, BedDouble,
   ChevronRight, ChevronLeft, RefreshCcw,
-  CheckCircle2, Luggage, X, Trash2,
+  CheckCircle2, Luggage, X,
   AlertTriangle, Wallet, BadgeCheck,
   LogIn, Lock
 } from "lucide-react";
@@ -69,7 +69,7 @@ function LoginPromptModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      className="fixed inset-0 z-90 flex items-center justify-center p-4"
     >
       <motion.div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -253,7 +253,7 @@ function OverBudgetModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      className="fixed inset-0 z-90 flex items-center justify-center p-4"
     >
       <motion.div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -377,8 +377,8 @@ function SummaryItemCard({
           alt={item.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        {/* gradient overlay for text legibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        {/* linear overlay for text legibility */}
+        <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent" />
         {/* price chip on image */}
         <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-neutral-900 shadow-sm">
           ฿{item.min_price.toLocaleString()}
@@ -514,7 +514,7 @@ export function TripSummaryModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      className="fixed inset-0 z-80 flex items-end sm:items-center justify-center p-0 sm:p-6"
     >
       {/* Backdrop */}
       <motion.div
@@ -653,7 +653,7 @@ export function TripSummaryModal({
                 <Luggage className="w-7 h-7" />
               </div>
               <p className="text-sm font-bold text-neutral-700">ยังไม่มีรายการในทริป</p>
-              <p className="text-xs text-neutral-400 mt-0.5 max-w-[200px]">เลือกสถานที่ท่องเที่ยวหรือที่พักที่สนใจเพิ่มเข้ามาได้เลย</p>
+              <p className="text-xs text-neutral-400 mt-0.5 max-w-50">เลือกสถานที่ท่องเที่ยวหรือที่พักที่สนใจเพิ่มเข้ามาได้เลย</p>
             </div>
           ) : (
             grouped.filter(g => g.items.length > 0).map(({ key, items: catItems }) => (
@@ -723,7 +723,7 @@ function SuccessModal({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      className="fixed inset-0 z-90 flex items-center justify-center p-4"
     >
       <motion.div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -930,7 +930,7 @@ export default function BudgetTripPlanner({
     <div className="w-full max-w-5xl mx-auto py-12 px-4 sm:px-6 pb-16 relative">
 
       {/* ── Header & Input ─────────────────────────────────────── */}
-      <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.05)] border border-neutral-100 mb-10">
+      <div className="bg-white rounded-4xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.05)] border border-neutral-100 mb-10">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-neutral-900 mb-6 flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-black" />
           จัดทริปตามงบประมาณ
@@ -1283,7 +1283,7 @@ function TripRow({
                     },
                   }}
                   whileHover={{ y: wouldExceed ? 0 : -4, transition: { duration: 0.2 } }}
-                  className={`snap-start shrink-0 w-[280px] bg-white rounded-2xl overflow-hidden cursor-pointer group transition-all duration-300 ${
+                  className={`snap-start shrink-0 w-70 bg-white rounded-2xl overflow-hidden cursor-pointer group transition-all duration-300 ${
                     isSelected
                       ? "ring-2 ring-blue-500 shadow-[0_8px_25px_rgba(59,130,246,0.18)]"
                       : wouldExceed

@@ -102,7 +102,7 @@ export default function AdminRestaurantsPage() {
         >
           <div className="flex items-center gap-3">
             <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br
+              className="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br
     from-blue-600
     via-blue-500
     to-indigo-700
@@ -133,7 +133,7 @@ export default function AdminRestaurantsPage() {
     px-5 py-2.5
     text-sm font-semibold tracking-wide
     text-white
-    bg-gradient-to-br
+    bg-linear-to-br
     from-blue-600
     to-blue-500
     border border-white/10
@@ -150,10 +150,10 @@ export default function AdminRestaurantsPage() {
   "
           >
             {/* Shine Effect */}
-            <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            <span className="absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
 
             {/* Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-white/5" />
+            <div className="absolute inset-0 bg-linear-to-t from-black/10 to-white/5" />
 
             <Plus
               size={16}
@@ -222,7 +222,7 @@ export default function AdminRestaurantsPage() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.16 }}
-          className="min-h-[450px]"
+          className="min-h-112"
         >
           <AnimatePresence mode="wait">
             {isLoading ? (

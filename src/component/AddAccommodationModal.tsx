@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { 
   X, 
-  Upload, 
   Image as ImageIcon, 
   Loader2, 
   Building2, 
@@ -427,7 +426,7 @@ export const AddAccommodationModal = ({
                       onDragLeave={onDragLeave}
                       onDrop={onDrop}
                       onClick={() => fileInputRef.current?.click()}
-                      className={`relative flex flex-col items-center justify-center w-full min-h-[140px] p-4 transition-all border border-dashed rounded-lg cursor-pointer
+                      className={`relative flex flex-col items-center justify-center w-full min-h-35 p-4 transition-all border border-dashed rounded-lg cursor-pointer
                         ${isDragging ? "border-zinc-500 bg-zinc-100/70" : "border-zinc-300 hover:border-zinc-400 bg-zinc-50/50 hover:bg-zinc-50"}`}
                     >
                       <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
@@ -616,7 +615,7 @@ export const AddAccommodationModal = ({
                 form="accommodation-form"
                 type="submit"
                 disabled={submitting || uploading}
-                className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-[120px]"
+                className="px-4 py-2 text-[13px] font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 shadow-sm active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center min-w-30"
               >
                 {uploading || submitting ? (
                   <span className="flex items-center gap-2">

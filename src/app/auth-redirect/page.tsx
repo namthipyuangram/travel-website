@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { Loader2 } from "lucide-react";
 
-export const AuthRedirectPage = () => {
+export default function AuthRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {

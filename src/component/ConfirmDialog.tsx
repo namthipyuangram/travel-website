@@ -45,7 +45,7 @@ export default function ConfirmDialog({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -254,8 +254,8 @@ export default function ConfirmDialog({
                 h-1 w-full
                 ${
                   danger
-                    ? "bg-gradient-to-r from-red-500 to-red-600"
-                    : "bg-gradient-to-r from-blue-500 to-blue-600"
+                    ? "bg-linear-to-r from-red-500 to-red-600"
+                    : "bg-linear-to-r from-blue-500 to-blue-600"
                 }
               `}
             />

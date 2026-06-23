@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { 
-  MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, 
-  Trash2, Send, Share, Heart, Utensils, Info, CheckCircle2,
+  MapPin, Phone, Clock, Star, MessageSquare, 
+  Trash2, Share, Heart, Utensils, Info,
   ChevronLeft
 } from "lucide-react";
 import Link from "next/link";
@@ -238,7 +238,7 @@ export default function RestaurantDetail() {
   if (error || !restaurant) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-4">
-        <div className="bg-white p-10 rounded-[2rem] shadow-sm border border-neutral-100 text-center max-w-md w-full">
+        <div className="bg-white p-10 rounded-4xl shadow-sm border border-neutral-100 text-center max-w-md w-full">
           <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">
             🥲
           </div>
@@ -263,7 +263,7 @@ export default function RestaurantDetail() {
       
       {/* 🌟 Top Navigation */}
       <nav className="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-neutral-100/80 transition-all">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div className="max-w-300 mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link href="/restaurant" className="inline-flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition font-medium group">
             <div className="p-2 rounded-full bg-neutral-50 group-hover:bg-neutral-100 transition-colors">
               <ChevronLeft className="w-4 h-4" />
@@ -285,7 +285,7 @@ export default function RestaurantDetail() {
         </div>
       </nav>
 
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-300 mx-auto px-4 sm:px-6 py-8">
         
         {/* 🌟 Header Section */}
         <div className="mb-6">
@@ -309,7 +309,7 @@ export default function RestaurantDetail() {
             {restaurant.location && (
               <div className="flex items-center gap-1 underline cursor-pointer hover:text-neutral-500 before:content-['·'] before:mr-2 before:text-neutral-300 before:no-underline">
                 <MapPin className="w-4 h-4 shrink-0" />
-                <span className="truncate max-w-[200px] sm:max-w-none">{restaurant.location}</span>
+                <span className="truncate max-w-50 sm:max-w-none">{restaurant.location}</span>
               </div>
             )}
           </div>

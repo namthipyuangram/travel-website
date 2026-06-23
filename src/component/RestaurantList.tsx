@@ -109,7 +109,7 @@ export default function RestaurantList() {
     return (
       <div
         id="restaurants"
-        className="w-full max-w-[1400px] mx-auto px-6 pb-20"
+        className="w-full max-w-350 mx-auto px-6 pb-20"
       >
         <div className="flex flex-col gap-6 mb-10">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -130,9 +130,9 @@ export default function RestaurantList() {
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <div
               key={i}
-              className="bg-white rounded-[1.5rem] p-3 shadow-sm border border-neutral-100 animate-pulse"
+              className="bg-white rounded-3xl p-3 shadow-sm border border-neutral-100 animate-pulse"
             >
-              <div className="w-full aspect-[4/3] bg-neutral-200/60 rounded-[1.25rem] mb-4"></div>
+              <div className="w-full aspect-4/3 bg-neutral-200/60 rounded-[1.25rem] mb-4"></div>
               <div className="px-2 space-y-3">
                 <div className="h-5 bg-neutral-200/60 rounded-md w-3/4"></div>
                 <div className="h-4 bg-neutral-200/60 rounded-md w-full"></div>
@@ -178,7 +178,7 @@ export default function RestaurantList() {
   return (
     <div
       id="restaurants"
-      className="w-full mt-6 max-w-[1400px] mx-auto px-6 pb-20"
+      className="w-full mt-6 max-w-350 mx-auto px-6 pb-20"
     >
       {/* 🌟 Section Header & Filters */}
       <div className="flex flex-col gap-6 mb-10">
@@ -239,7 +239,7 @@ export default function RestaurantList() {
 
       {/* 🌟 Content Area */}
       {restaurants.length === 0 ? (
-        <div className="bg-white rounded-[2rem] p-16 text-center border border-neutral-100 shadow-sm flex flex-col items-center">
+        <div className="bg-white rounded-4xl p-16 text-center border border-neutral-100 shadow-sm flex flex-col items-center">
           <div className="text-4xl mb-4 opacity-50">🍳</div>
           <h4 className="text-lg font-medium text-neutral-900 mb-2">
             ไม่พบร้านอาหารที่คุณค้นหา
@@ -279,9 +279,9 @@ export default function RestaurantList() {
                   href={`/restaurant/${r.id}`}
                   className="block outline-none group h-full"
                 >
-                  <div className="bg-white rounded-[1.5rem] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-100/60 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
+                  <div className="bg-white rounded-3xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-100/60 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
                     {/* Image Section */}
-                    <div className="relative w-full aspect-[4/3] rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
+                    <div className="relative w-full aspect-4/3 rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
                       <Image
                         src={getRestaurantImageUrl(r.image_url)}
                         alt={r.name}
@@ -290,7 +290,7 @@ export default function RestaurantList() {
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-700 ease-[0.16,1,0.3,1]"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                       {/* Badge Top Left */}
                       <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold text-neutral-900 shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-white/20 flex items-center gap-1.5">
@@ -310,7 +310,7 @@ export default function RestaurantList() {
                     </div>
 
                     {/* Content Section */}
-                    <div className="px-2 pb-2 flex flex-col flex-grow">
+                    <div className="px-2 pb-2 flex flex-col grow">
                       <h4 className="text-[1.1rem] font-bold text-neutral-900 line-clamp-1 mb-1.5 group-hover:text-neutral-700 transition-colors">
                         {r.name}
                       </h4>
@@ -321,7 +321,7 @@ export default function RestaurantList() {
                       <div className="pt-3 border-t border-neutral-100 flex items-center justify-between mt-auto">
                         <p className="text-sm text-neutral-500 flex items-center gap-1.5 font-medium">
                           <MapPin className="w-3.5 h-3.5 opacity-70" />
-                          <span className="truncate max-w-[140px]">
+                          <span className="truncate max-w-35">
                             {r.location}
                           </span>
                         </p>

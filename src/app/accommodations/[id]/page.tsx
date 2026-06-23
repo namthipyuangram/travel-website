@@ -6,7 +6,7 @@ import { createSupabaseClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams, usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { createBrowserClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import toast from "react-hot-toast";
@@ -14,7 +14,6 @@ import {
   MapPin,
   Phone,
   Star,
-  ArrowLeft,
   MessageSquare,
   Trash2,
   Share,
@@ -212,7 +211,6 @@ export default function AccommodationDetail() {
     }
   };
 
-  // 🌟 Loading State (Premium Skeleton)
   if (loading) {
     return (
       <div className="min-h-screen bg-white max-w-300 mx-auto px-4 sm:px-6 py-8">
@@ -237,7 +235,6 @@ export default function AccommodationDetail() {
     );
   }
 
-  // 🚨 Error State
   if (error || !accommodation) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-4">

@@ -16,7 +16,6 @@ import {
   LogOut,
   Loader2,
   UserCog2,
-  Search,
   Menu,
   X,
 } from "lucide-react";
@@ -70,7 +69,7 @@ function Tooltip({ label }: { label: string }) {
       role="tooltip"
       className="
         pointer-events-none absolute left-[calc(100%+12px)] top-1/2
-        -translate-y-1/2 z-[100] whitespace-nowrap rounded-lg
+        -translate-y-1/2 z-100 whitespace-nowrap rounded-lg
         bg-[#1E3A8A] border border-[#1E3A8A]
         px-3 py-1.5 text-[12px] font-medium text-white
         shadow-[0_8px_24px_rgba(0,0,0,0.12)]
@@ -202,11 +201,11 @@ export default function Sidebar() {
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
       <aside
         className={[
-          "fixed left-0 top-0 z-50 flex h-screen flex-col relative",
+          "fixed left-0 top-0 z-50 flex h-screen flex-col",
           "border-r border-[#DBEAFE] bg-white",
           "transition-[width,transform] duration-300 ease-in-out",
           "lg:sticky lg:translate-x-0",
-          collapsed ? "w-[72px]" : "w-60", // แก้ไข w-17 เป็น w-[72px] เพื่อป้องกันบัค
+          collapsed ? "w-18" : "w-60",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
@@ -215,7 +214,7 @@ export default function Sidebar() {
           onClick={() => setCollapsed((c) => !c)}
           aria-label={collapsed ? "ขยาย Sidebar" : "ย่อ Sidebar"}
           className="
-            absolute -right-3.5 top-[17px] z-50 hidden h-7 w-7 items-center justify-center
+            absolute -right-3.5 top-4.25 z-50 hidden h-7 w-7 items-center justify-center
             rounded-full border border-[#DBEAFE] bg-white
             text-[#3B82F6] shadow-sm
             transition-all hover:border-[#EC4899]/40 hover:text-[#EC4899] hover:scale-110
@@ -228,7 +227,7 @@ export default function Sidebar() {
         </button>
 
         {/* ── Logo / Header ──────────────────────────────────────── */}
-        <div className="flex h-[62px] shrink-0 items-center border-b border-[#DBEAFE] px-[14px]">
+        <div className="flex h-15 shrink-0 items-center border-b border-[#DBEAFE] px-3.5">
           <Link
             href="/dashboard"
             className="group flex items-center gap-3 px-2 w-full min-w-0"
@@ -274,19 +273,19 @@ export default function Sidebar() {
           className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           aria-label="Navigation"
         >
-          <div className="space-y-[18px]">
+          <div className="space-y-4">
             {NAVIGATION_GROUPS.map((group) => (
               <div key={group.label}>
                 {/* Group header */}
                 {!collapsed ? (
-                  <p className="mb-[5px] px-2 text-[9.5px] font-bold uppercase tracking-[0.1em] text-[#3B82F6]">
+                  <p className="mb-1 px-2 text-[9.5px] font-bold uppercase tracking-widest text-[#3B82F6]">
                     {group.label}
                   </p>
                 ) : (
-                  <div className="mx-auto mb-[6px] h-px w-5 rounded-full bg-[#DBEAFE]" />
+                  <div className="mx-auto mb-2 h-px w-5 rounded-full bg-[#DBEAFE]" />
                 )}
 
-                <ul className="space-y-[1px]" role="list">
+                <ul className="space-y-0.5" role="list">
                   {group.items.map((item) => {
                     const active = isActive(item.href);
                     const Icon = item.icon;
@@ -300,7 +299,7 @@ export default function Sidebar() {
                             "group relative flex h-9 items-center rounded-lg min-w-0",
                             "outline-none transition-all duration-150",
                             "focus-visible:ring-2 focus-visible:ring-[#EC4899]/40",
-                            collapsed ? "justify-center px-0" : "px-[9px]",
+                            collapsed ? "justify-center px-0" : "px-2.5",
                             active
                               ? "bg-[#EC4899]/10 text-[#EC4899]"
                               : "text-[#64748B] hover:bg-[#EFF6FF] hover:text-[#1E3A8A]",
@@ -310,7 +309,7 @@ export default function Sidebar() {
                           {active && (
                             <span
                               aria-hidden="true"
-                              className="absolute left-0 top-1/2 h-[18px] w-[3px] -translate-y-1/2 rounded-r-[3px]"
+                              className="absolute left-0 top-1/2 h-4.5 w-1 -translate-y-1/2 rounded-r-[3px]"
                               style={{
                                 background: "linear-gradient(180deg, #EC4899, #F472B6)",
                               }}
@@ -319,7 +318,7 @@ export default function Sidebar() {
 
                           <Icon
                             aria-hidden="true"
-                            className={`h-[15px] w-[15px] shrink-0 transition-colors ${
+                            className={`h-4 w-4 shrink-0 transition-colors ${
                               active
                                 ? "text-[#EC4899]"
                                 : "text-[#94A3B8] group-hover:text-[#3B82F6]"
@@ -329,7 +328,7 @@ export default function Sidebar() {
                           {/* Text (เฟดหายเนียนๆ ป้องกัน Scrollbar ดันจอ) */}
                           <div
                             className={`flex items-center overflow-hidden transition-all duration-300 ${
-                              collapsed ? "w-0 opacity-0" : "flex-1 w-auto opacity-100 ml-[9px]"
+                              collapsed ? "w-0 opacity-0" : "flex-1 w-auto opacity-100 ml-2"
                             }`}
                           >
                             <span className="truncate text-[13px] font-medium block w-full">
@@ -377,7 +376,7 @@ export default function Sidebar() {
                 </div>
                 <span
                   aria-label="Online"
-                  className="absolute -bottom-0.5 -right-0.5 h-[9px] w-[9px] rounded-full border-2 border-white bg-emerald-400"
+                  className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400"
                 />
               </div>
 
@@ -391,7 +390,7 @@ export default function Sidebar() {
                   <p className="truncate text-[13px] font-semibold capitalize leading-none text-[#1E3A8A]">
                     {displayName}
                   </p>
-                  <p className="mt-[3px] truncate text-[10px] uppercase leading-none tracking-[0.04em] text-[#3B82F6]">
+                  <p className="mt-1 truncate text-[10px] uppercase leading-none tracking-[0.04em] text-[#3B82F6]">
                     Administrator
                   </p>
                 </div>

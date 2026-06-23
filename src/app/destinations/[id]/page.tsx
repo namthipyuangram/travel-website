@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  MapPin, Phone, Clock, Star, ArrowLeft, MessageSquare, 
-  Trash2, Send, Share, Heart, Ticket, Info, CheckCircle2,
+  MapPin, Phone, Clock, Star, MessageSquare, 
+  Trash2, Share, Heart, Info, CheckCircle2,
   Navigation,
   ChevronLeft
 } from "lucide-react";
