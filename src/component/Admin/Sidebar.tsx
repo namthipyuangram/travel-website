@@ -55,8 +55,7 @@ const NAVIGATION_GROUPS: NavGroup[] = [
   {
     label: "ระบบ",
     items: [
-      { name: "จัดการผู้ใช้", href: "/admin/users", icon: UserCog2 },
-      { name: "ติดต่อเรา", href: "/contact", icon: Mail },
+      { name: "จัดการผู้ใช้", href: "/admin/users", icon: UserCog2 }
     ],
   },
 ];

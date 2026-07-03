@@ -82,7 +82,7 @@ export const PUT = async (request: NextRequest, { params }: RouteParams) => {
     }
 
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profile") // ⚠️ เช็คให้ดีว่าในฐานข้อมูลชื่อ "profile" หรือ "profiles" (เติม s ไหม)
+      .from("profiles") // ⚠️ เช็คให้ดีว่าในฐานข้อมูลชื่อ "profile" หรือ "profiles" (เติม s ไหม)
       .select("role")
       .eq("id", user.id) // สมมติว่าคอลัมน์เชื่อมโยงในตาราง profile ของคุณชื่อ "id" หรือ "user_id"
       .single();
@@ -174,7 +174,7 @@ export const DELETE = async (request: NextRequest, { params }: RouteParams) => {
 
     // 🔥 ตรวจสอบสิทธิ์ Admin
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profile") // ⚠️ เช็คให้ดีว่าในฐานข้อมูลชื่อ "profile" หรือ "profiles" (เติม s ไหม)
+      .from("profiles") // ⚠️ เช็คให้ดีว่าในฐานข้อมูลชื่อ "profile" หรือ "profiles" (เติม s ไหม)
       .select("role")
       .eq("id", user.id) // สมมติว่าคอลัมน์เชื่อมโยงในตาราง profile ของคุณชื่อ "id" หรือ "user_id"
       .single();
