@@ -174,13 +174,9 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
     }
 
     const numericId = Number(id);
-    const isAdmin = user.app_metadata?.role === "admin";
-
-    // 💡 Step 1: ค้นหาข้อมูลร้านอาหารก่อน เพื่อเช็คว่ามีอยู่จริงไหม และใครเป็นเจ้าของ
-    // ใช้ maybeSingle() เพื่อไม่ให้เกิด Error ถ้าหาไม่เจอ แต่จะคืนค่า null แทน
     const { data: restaurant, error: fetchError } = await supabaseAdmin
       .from("restaurants")
-      .select("id, created_by, image_url") // ดึง image_url มาเผื่อต้องการลบไฟล์รูป
+      .select("id, image_url") // ดึง image_url มาเผื่อต้องการลบไฟล์รูป
       .eq("id", numericId)
       .maybeSingle();
 
@@ -190,12 +186,6 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
       return NextResponse.json({ error: "ไม่พบข้อมูลร้านอาหารในระบบ" }, { status: 404 });
     }
 
-    // 💡 Step 2: ตรวจสอบสิทธิ์ (Authorization)
-    if (!isAdmin && restaurant.created_by !== user.id) {
-      return NextResponse.json({ error: "คุณไม่มีสิทธิ์ลบร้านอาหารนี้" }, { status: 403 });
-    }
-
-    // 💡 Step 3: ทำการลบข้อมูลเมื่อผ่านด่านตรวจสอบทั้งหมด
     const { error: deleteError } = await supabaseAdmin
       .from("restaurants")
       .delete()
@@ -212,16 +202,12 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
       throw deleteError;
     }
 
-    // 💡 Step 4 (Optional): ลบรูปภาพออกจาก Storage เพื่อไม่ให้เป็นไฟล์ขยะ
-    // ถ้าคุณใช้ Supabase Storage คุณสามารถลบไฟล์ได้ตรงนี้
-    /*
     if (restaurant.image_url) {
       const fileName = restaurant.image_url.split('/').pop();
       if (fileName) {
-        await supabaseAdmin.storage.from('restaurant_images').remove([fileName]);
+        await supabaseAdmin.storage.from('Images').remove([fileName]);
       }
     }
-    */
 
     return NextResponse.json({ success: true, message: "ลบข้อมูลสำเร็จ" }, { status: 200 });
   } catch (error: any) {
