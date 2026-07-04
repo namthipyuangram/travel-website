@@ -176,39 +176,65 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
     const numericId = Number(id);
     const isAdmin = user.app_metadata?.role === "admin";
 
-    const query = supabaseAdmin
+    // 💡 Step 1: ค้นหาข้อมูลร้านอาหารก่อน เพื่อเช็คว่ามีอยู่จริงไหม และใครเป็นเจ้าของ
+    // ใช้ maybeSingle() เพื่อไม่ให้เกิด Error ถ้าหาไม่เจอ แต่จะคืนค่า null แทน
+    const { data: restaurant, error: fetchError } = await supabaseAdmin
+      .from("restaurants")
+      .select("id, created_by, image_url") // ดึง image_url มาเผื่อต้องการลบไฟล์รูป
+      .eq("id", numericId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    if (!restaurant) {
+      return NextResponse.json({ error: "ไม่พบข้อมูลร้านอาหารในระบบ" }, { status: 404 });
+    }
+
+    // 💡 Step 2: ตรวจสอบสิทธิ์ (Authorization)
+    if (!isAdmin && restaurant.created_by !== user.id) {
+      return NextResponse.json({ error: "คุณไม่มีสิทธิ์ลบร้านอาหารนี้" }, { status: 403 });
+    }
+
+    // 💡 Step 3: ทำการลบข้อมูลเมื่อผ่านด่านตรวจสอบทั้งหมด
+    const { error: deleteError } = await supabaseAdmin
       .from("restaurants")
       .delete()
       .eq("id", numericId);
 
-    if (!isAdmin) {
-      query.eq("created_by", user.id);
-    }
-
-    const { data, error } = await query.select("id");
-
-    if (error) {
-      if (error.code === "23503") {
+    if (deleteError) {
+      // ดักจับกรณีข้อมูลผูกกัน (Foreign Key Violation)
+      if (deleteError.code === "23503") {
         return NextResponse.json(
-          { error: "ไม่สามารถลบได้เนื่องจากมีข้อมูลอื่นผูกอยู่ (เช่น รีวิว หรือรูปภาพ) กรุณาลบข้อมูลเหล่านั้นก่อน" }, 
-          { status: 400 } // ใช้ 400 Bad Request แทน 500
+          { error: "ไม่สามารถลบได้เนื่องจากมีข้อมูลอื่นผูกอยู่ (เช่น รีวิว) กรุณาลบข้อมูลเหล่านั้นก่อน" }, 
+          { status: 400 }
         );
       }
-      throw error; 
+      throw deleteError;
     }
 
-    if (!data || data.length === 0) {
-      return NextResponse.json(
-        { error: "ไม่พบร้านอาหาร หรือคุณไม่มีสิทธิ์ลบ" }, 
-        { status: 403 }
-      );
+    // 💡 Step 4 (Optional): ลบรูปภาพออกจาก Storage เพื่อไม่ให้เป็นไฟล์ขยะ
+    // ถ้าคุณใช้ Supabase Storage คุณสามารถลบไฟล์ได้ตรงนี้
+    /*
+    if (restaurant.image_url) {
+      const fileName = restaurant.image_url.split('/').pop();
+      if (fileName) {
+        await supabaseAdmin.storage.from('restaurant_images').remove([fileName]);
+      }
     }
+    */
 
     return NextResponse.json({ success: true, message: "ลบข้อมูลสำเร็จ" }, { status: 200 });
   } catch (error: any) {
     console.error("❌ DELETE Restaurant Error:", error);
+    
+    // 💡 ส่ง Error ออกไปให้เห็นเฉพาะตอนรันในเครื่อง (Development) เพื่อให้หาบั๊กง่ายขึ้น
+    const isDev = process.env.NODE_ENV === "development";
+    
     return NextResponse.json(
-      { error: error.message || "เกิดข้อผิดพลาดระดับเซิร์ฟเวอร์ในการลบข้อมูล" }, 
+      { 
+        error: isDev ? `Server Error: ${error.message}` : "เกิดข้อผิดพลาดระดับเซิร์ฟเวอร์ในการลบข้อมูล",
+        debug: isDev ? error : undefined // ซ่อน debug ใน production
+      }, 
       { status: 500 }
     );
   }
