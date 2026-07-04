@@ -97,15 +97,26 @@ export const POST = async (req: Request) => {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 🔥 ป้องกันรัวยิง API (Rate Limiting)
     const { success } = await generalApiRateLimit.limit(`post_destination_${user.id}`);
     if (!success) {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
-    // 🔥 ตรวจสอบสิทธิ์แบบ Zero-Latency
-    const isAdmin = user.app_metadata?.role === "admin";
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
+    if (profileError || !profile) {
+      console.error("❌ Profile fetch error:", profileError?.message);
+      return NextResponse.json(
+        { error: "Forbidden: Profile not found" },
+        { status: 403 }
+      );
+    }
+
+    const isAdmin = profile.role === "admin";
     if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden: Admin only" },
@@ -113,7 +124,6 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // ป้องกัน Server Crash กรณีส่ง Body มาผิดฟอร์แมต
     let body: unknown;
     try {
       body = await req.json();
@@ -148,8 +158,7 @@ export const POST = async (req: Request) => {
           category,
           image_url: image_url || null,
           min_price: minPriceNum,
-          max_price: maxPriceNum,
-          created_by: user.id,
+          max_price: maxPriceNum
         },
       ])
       .select()
