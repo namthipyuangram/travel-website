@@ -125,7 +125,15 @@ export const PUT = async (req: NextRequest, { params }: RouteContext) => {
       (key) => updateData[key as keyof typeof updateData] === undefined && delete updateData[key as keyof typeof updateData]
     );
 
-    const { data, error } = await query.select().single();
+    // 👉 1. Initialize your DB client if needed (e.g., Supabase)
+    // const supabase = await createClient();
+
+    const { data, error } = await supabaseAdmin
+      .from("restaurants") 
+      .update(updateData)
+      .eq("id", numericId)
+      .select()
+      .single();
 
     if (error) {
       if (error.code === "PGRST116") {
