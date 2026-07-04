@@ -114,8 +114,7 @@ export const POST = async (req: NextRequest) => {
           description, 
           image_url: image_url || null, 
           location, 
-          category,
-          created_by: user.id, // ✅ สำคัญ: ระบุเจ้าของร้านเพื่อใช้ในการแก้ไข/ลบ
+          category
         }
       ])
       .select()
