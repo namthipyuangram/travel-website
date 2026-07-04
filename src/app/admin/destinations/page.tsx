@@ -277,13 +277,55 @@ export default function AdminDestinationsPage() {
     const url = editingDestination
       ? `/api/destinations/${editingDestination.id}`
       : "/api/destinations";
-    const payload = {
-      ...formData,
-      min_price: Number(formData.min_price) || 0,
-      max_price: Number(formData.max_price) || 0,
-    };
 
     try {
+      let finalImageUrl = formData.image_url; // เก็บ URL รูปเดิมไว้ก่อน (เป็น Array ตาม State)
+
+      // ==========================================
+      // 1. อัปโหลดรูปภาพใหม่ (ถ้ามี)
+      // ==========================================
+      if (formData.image_file && formData.image_file.length > 0) {
+        const file = formData.image_file[0]; // ดึงไฟล์รูปจาก State
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `destinations/${fileName}`;
+
+        // ⚠️ เปลี่ยน 'images' เป็นชื่อ Bucket ของคุณใน Supabase
+        const { error: uploadError } = await supabase.storage
+          .from('images') 
+          .upload(filePath, file);
+
+        if (uploadError) {
+          throw new Error(`Upload failed: ${uploadError.message}`);
+        }
+
+        // ดึง Public URL ของรูปที่เพิ่งอัปโหลด
+        const { data: { publicUrl } } = supabase.storage
+          .from('images')
+          .getPublicUrl(filePath);
+
+        // อัปเดต finalImageUrl ด้วย URL ใหม่ (ใส่เป็น Array กลับไปเพื่อให้เข้ากับโครงสร้างของคุณ)
+        finalImageUrl = [publicUrl]; 
+      }
+
+      // ==========================================
+      // 2. จัดเตรียมข้อมูล (Payload) เพื่อส่งเข้า API
+      // ==========================================
+      const payload = {
+        ...formData,
+        // แปลงเป็น JSON String (ถ้า Database ของคุณเก็บข้อมูล image_url เป็น String ที่เป็นลักษณะ "[]") 
+        // หรือถ้า DB เป็นชนิด Array ให้ส่งแค่ finalImageUrl ก็ได้ครับ
+        image_url: JSON.stringify(finalImageUrl), 
+        min_price: Number(formData.min_price) || 0,
+        max_price: Number(formData.max_price) || 0,
+      };
+
+      // ลบ `image_file` ออกจาก payload เพราะเราอัปโหลดไปแล้ว และ API รับไม่รับ Object ชนิด File
+      delete (payload as any).image_file;
+
+      // ==========================================
+      // 3. ยิง API บันทึกข้อมูล
+      // ==========================================
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -299,8 +341,9 @@ export default function AdminDestinationsPage() {
       } else {
         throw new Error("Failed to save");
       }
-    } catch (err) {
-      toast.error("บันทึกข้อมูลไม่สำเร็จ");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "บันทึกข้อมูลไม่สำเร็จ");
     } finally {
       setIsSubmitting(false);
     }
