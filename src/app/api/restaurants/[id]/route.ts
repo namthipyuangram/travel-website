@@ -125,17 +125,6 @@ export const PUT = async (req: NextRequest, { params }: RouteContext) => {
       (key) => updateData[key as keyof typeof updateData] === undefined && delete updateData[key as keyof typeof updateData]
     );
 
-    const isAdmin = user.app_metadata?.role === "admin";
-
-    let query = supabaseAdmin.from("restaurants").update(updateData);
-
-    if (isAdmin) {
-      query = query.eq("id", numericId);
-    } else {
-      // ผู้ใช้ทั่วไปแก้ไขได้เฉพาะร้านที่ตัวเองเป็นคนสร้าง
-      query = query.eq("id", numericId).eq("created_by", user.id);
-    }
-
     const { data, error } = await query.select().single();
 
     if (error) {
