@@ -176,17 +176,26 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
     const numericId = Number(id);
     const isAdmin = user.app_metadata?.role === "admin";
 
-    let query = supabaseAdmin.from("restaurants").delete();
+    const query = supabaseAdmin
+      .from("restaurants")
+      .delete()
+      .eq("id", numericId);
 
-    if (isAdmin) {
-      query = query.eq("id", numericId);
-    } else {
-      query = query.eq("id", numericId).eq("created_by", user.id);
+    if (!isAdmin) {
+      query.eq("created_by", user.id);
     }
 
-    const { error, data } = await query.select('id');
+    const { data, error } = await query.select("id");
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === "23503") {
+        return NextResponse.json(
+          { error: "ไม่สามารถลบได้เนื่องจากมีข้อมูลอื่นผูกอยู่ (เช่น รีวิว หรือรูปภาพ) กรุณาลบข้อมูลเหล่านั้นก่อน" }, 
+          { status: 400 } // ใช้ 400 Bad Request แทน 500
+        );
+      }
+      throw error; 
+    }
 
     if (!data || data.length === 0) {
       return NextResponse.json(
@@ -199,7 +208,7 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
   } catch (error: any) {
     console.error("❌ DELETE Restaurant Error:", error);
     return NextResponse.json(
-      { error: error.message || "เกิดข้อผิดพลาดในการลบข้อมูล" }, 
+      { error: error.message || "เกิดข้อผิดพลาดระดับเซิร์ฟเวอร์ในการลบข้อมูล" }, 
       { status: 500 }
     );
   }
