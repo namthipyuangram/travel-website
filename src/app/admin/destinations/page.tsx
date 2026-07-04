@@ -292,7 +292,7 @@ export default function AdminDestinationsPage() {
 
         // ⚠️ เปลี่ยน 'images' เป็นชื่อ Bucket ของคุณใน Supabase
         const { error: uploadError } = await supabase.storage
-          .from('images') 
+          .from('Images') 
           .upload(filePath, file);
 
         if (uploadError) {
@@ -301,10 +301,9 @@ export default function AdminDestinationsPage() {
 
         // ดึง Public URL ของรูปที่เพิ่งอัปโหลด
         const { data: { publicUrl } } = supabase.storage
-          .from('images')
+          .from('Images')
           .getPublicUrl(filePath);
 
-        // อัปเดต finalImageUrl ด้วย URL ใหม่ (ใส่เป็น Array กลับไปเพื่อให้เข้ากับโครงสร้างของคุณ)
         finalImageUrl = [publicUrl]; 
       }
 
