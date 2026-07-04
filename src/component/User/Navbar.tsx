@@ -20,11 +20,10 @@ import { ProfileModal } from "../ProfileModal";
 
 const navItems = [
   { name: "หน้าแรก", href: "/dashboard" },
-  { name: "สถานที่ท่องเที่ยว", href: "/destinations" },
+  { name: "สถานที่ท่องเที่ยว", href: "/sdestinations" },
   { name: "ของกิน", href: "/restaurant" },
   { name: "ที่พัก", href: "/accommodations" },
-  { name: "ทริปเที่ยวของฉัน", href: "/trips" },
-  { name: "ติดต่อเรา", href: "/contact" },
+  { name: "ทริปเที่ยวของฉัน", href: "/trips" }
 ];
 
 // ─── Pages ที่มี hero เข้ม (เริ่มต้นด้วย glass mode) ─────────────────────────

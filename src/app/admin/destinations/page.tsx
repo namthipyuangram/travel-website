@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
@@ -81,9 +81,7 @@ export default function AdminDestinationsPage() {
   );
 
   // Bulk Actions State
-  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(
-    new Set(),
-  );
+  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [bulkDialog, setBulkDialog] = useState<{
     type: "delete";
     ids: (string | number)[];
@@ -114,6 +112,35 @@ export default function AdminDestinationsPage() {
   const [activeCategory, setActiveCategory] = useState<string>("ทั้งหมด");
   const [page, setPage] = useState(1);
   const itemsPerPage = 5;
+
+
+  const parseImageUrl = (urlData: string): string[] => {
+    if (!urlData) return [];
+    if (Array.isArray(urlData)) return urlData;
+    try {
+      const parsed = JSON.parse(urlData);
+      return Array.isArray(parsed) ? parsed : [urlData];
+    } catch {
+      return [urlData];
+    }
+  };
+
+  const fetchDestinations = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch("/api/destinations");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setDestinations(data);
+    } catch (error) { // เปลี่ยนจาก err เป็น error
+      setError("ไม่สามารถดึงข้อมูลสถานที่ท่องเที่ยวได้");
+      toast.error("ดึงข้อมูลไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
 
   // ==================== EFFECTS ====================
   useEffect(() => {
@@ -168,19 +195,6 @@ export default function AdminDestinationsPage() {
   }, [supabase, router]);
 
   useEffect(() => {
-    setPage(1);
-    setSelectedIds(new Set());
-  }, [searchQuery, activeCategory, destinations.length]);
-
-  useEffect(() => {
-    if (editingDestination?.image_url) {
-      setImagePreview(parseImageUrl(editingDestination.image_url));
-    } else {
-      setImagePreview([]);
-    }
-  }, [editingDestination]);
-
-  useEffect(() => {
     const closeMenus = () => setOpenCardMenuId(null);
     window.addEventListener("click", closeMenus);
     return () => window.removeEventListener("click", closeMenus);
@@ -199,23 +213,6 @@ export default function AdminDestinationsPage() {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  // ==================== API CALLS ====================
-  const fetchDestinations = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch("/api/destinations");
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setDestinations(data);
-    } catch (err) {
-      setError("ไม่สามารถดึงข้อมูลสถานที่ท่องเที่ยวได้");
-      toast.error("ดึงข้อมูลไม่สำเร็จ");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleConfirmDelete = async () => {
     if (!deleteConfirm) return;
     const { id } = deleteConfirm;
@@ -227,11 +224,7 @@ export default function AdminDestinationsPage() {
 
       toast.success("ลบสถานที่เรียบร้อยแล้ว");
       setDestinations((prev) => prev.filter((d) => d.id !== id));
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      setSelectedIds((prev) => prev.filter((itemId) => itemId !== id));
 
       if (displayedDestinations.length === 1 && page > 1) {
         setPage((p) => p - 1);
@@ -260,7 +253,7 @@ export default function AdminDestinationsPage() {
       if (deleteError) throw deleteError;
       toast.success(`ลบข้อมูลสถานที่จำนวน ${ids.length} รายการเรียบร้อยแล้ว`);
 
-      setSelectedIds(new Set());
+      setSelectedIds([]);
       setBulkDialog(null);
       fetchDestinations();
     } catch (err) {
@@ -310,16 +303,18 @@ export default function AdminDestinationsPage() {
   const handleOpenModal = (destination?: Destination) => {
     if (destination) {
       setEditingDestination(destination);
+      setImagePreview(parseImageUrl(destination.image_url || ""));
       setFormData({
         name: destination.name,
         description: destination.description || "",
         category: destination.category,
-        image_url: parseImageUrl(destination.image_url),
+        image_url: parseImageUrl(destination.image_url || ""),
         min_price: destination.min_price ?? 0,
         max_price: destination.max_price ?? 0,
       });
     } else {
       setEditingDestination(null);
+      setImagePreview([]);
       setFormData({
         name: "",
         description: "",
@@ -339,16 +334,6 @@ export default function AdminDestinationsPage() {
     setIsCategoryOpen(false);
   };
 
-  const parseImageUrl = (urlData: any): string[] => {
-    if (!urlData) return [];
-    if (Array.isArray(urlData)) return urlData;
-    try {
-      const parsed = JSON.parse(urlData);
-      return Array.isArray(parsed) ? parsed : [urlData];
-    } catch {
-      return [urlData];
-    }
-  };
 
   const handleImageProcessing = (file: File) => {
     const previewUrl = URL.createObjectURL(file);
@@ -370,29 +355,22 @@ export default function AdminDestinationsPage() {
     setOpenCardMenuId(openCardMenuId === id ? null : id);
   };
 
-  const toggleSelectOne = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    id: string | number,
-  ) => {
+  const toggleSelectOne = (e: React.MouseEvent, id: string | number) => {
     e.stopPropagation();
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
   };
 
   const toggleSelectAllOnPage = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allOnPageSelected) {
-        displayedDestinations.forEach((d) => next.delete(d.id));
-      } else {
-        displayedDestinations.forEach((d) => next.add(d.id));
-      }
-      return next;
-    });
+    if (allOnPageSelected) {
+      const pageIds = displayedDestinations.map((d) => d.id);
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      const pageIds = displayedDestinations.map((d) => d.id);
+      const newIds = pageIds.filter((id) => !selectedIds.includes(id));
+      setSelectedIds((prev) => [...prev, ...newIds]);
+    }
   };
 
   // ==================== COMPUTED DATA ====================
@@ -413,30 +391,23 @@ export default function AdminDestinationsPage() {
     1,
     Math.ceil(filteredDestinations.length / itemsPerPage),
   );
-  const displayedDestinations = useMemo(() => {
-    return filteredDestinations.slice(
-      (page - 1) * itemsPerPage,
-      page * itemsPerPage,
-    );
-  }, [filteredDestinations, page]);
 
-  const allOnPageSelected = useMemo(() => {
-    return (
-      displayedDestinations.length > 0 &&
-      displayedDestinations.every((d) => selectedIds.has(d.id))
-    );
-  }, [displayedDestinations, selectedIds]);
+  const displayedDestinations = filteredDestinations.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage
+  );
 
-  const stats = useMemo(() => {
-    return {
-      total: destinations.length,
-      free: destinations.filter((a) => a.max_price === 0 && a.min_price === 0)
-        .length,
-      paid: destinations.filter(
-        (a) => (a.max_price || 0) > 0 || (a.min_price || 0) > 0,
-      ).length,
-    };
-  }, [destinations]);
+  const allOnPageSelected =
+    displayedDestinations.length > 0 &&
+    displayedDestinations.every((d) => selectedIds.includes(d.id));
+
+  const stats = {
+    total: destinations.length,
+    free: destinations.filter((a) => a.max_price === 0 && a.min_price === 0).length,
+    paid: destinations.filter(
+      (a) => (a.max_price || 0) > 0 || (a.min_price || 0) > 0
+    ).length,
+  };
 
   // ==================== RENDER ====================
   if (authLoaded && !user) {
@@ -592,7 +563,11 @@ export default function AdminDestinationsPage() {
               type="text"
               placeholder="ค้นหาจากชื่อสถานที่ หรือคำอธิบาย (เช่น น้ำตก, ดอย, วัด)..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+                setSelectedIds([]);
+              }}
               className="w-full pl-10 pr-9 py-2.5 bg-zinc-50/80 hover:bg-zinc-100/50 focus:bg-white border border-zinc-200/80 focus:border-zinc-400 rounded-xl text-xs text-zinc-900 placeholder:text-zinc-400 transition-all outline-none"
             />
             {searchQuery && (
@@ -613,12 +588,15 @@ export default function AdminDestinationsPage() {
               {CATEGORIES.map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveCategory(tab)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 select-none ${
-                    activeCategory === tab
+                  onClick={() => {
+                    setActiveCategory(tab);
+                    setPage(1);
+                    setSelectedIds([]); // หรือ [] ถ้าทำตามข้อ 3 ด้านล่าง
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 select-none ${activeCategory === tab
                       ? "bg-blue-600 text-white font-semibold shadow-sm"
                       : "text-slate-500 hover:bg-slate-100 hover:text-blue-600"
-                  }`}
+                    }`}
                 >
                   {tab}
                 </button>
@@ -694,8 +672,8 @@ export default function AdminDestinationsPage() {
             ) : (
               <motion.div key="card-list" layout className="space-y-4">
                 {displayedDestinations.map((d, index) => {
-                  const isSelected = selectedIds.has(d.id);
-                  const parsedImages = parseImageUrl(d.image_url);
+                  const isSelected = selectedIds.includes(d.id);
+                  const parsedImages = parseImageUrl(d.image_url || "");
                   const displayImgUrl =
                     parsedImages.length > 0 ? parsedImages[0] : null;
 
@@ -708,11 +686,10 @@ export default function AdminDestinationsPage() {
                       transition={{ duration: 0.2, delay: index * 0.04 }}
                       key={d.id}
                       onClick={() => handleOpenModal(d)}
-                      className={`group bg-white rounded-2xl p-4 transition-all flex flex-col sm:flex-row gap-5 relative cursor-pointer border ${
-                        isSelected
+                      className={`group bg-white rounded-2xl p-4 transition-all flex flex-col sm:flex-row gap-5 relative cursor-pointer border ${isSelected
                           ? "border-blue-900 shadow-md ring-1 ring-blue-900/10 bg-blue-50/40"
                           : "border-blue-200/80 shadow-sm hover:shadow-md hover:border-blue-300"
-                      }`}
+                        }`}
                     >
                       {/* THUMBNAIL BLOCK */}
                       <div className="relative w-full sm:w-60 aspect-16/10 shrink-0 rounded-xl overflow-hidden bg-zinc-100 border border-blue-200/50 flex items-center justify-center">
@@ -899,7 +876,7 @@ export default function AdminDestinationsPage() {
 
         {/* ─── VERCEL-STYLE FLOATING COMMAND BAR ─── */}
         <AnimatePresence>
-          {selectedIds.size > 0 && (
+          {selectedIds.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 40, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -910,7 +887,7 @@ export default function AdminDestinationsPage() {
                 <span className="text-zinc-300">
                   เลือกแล้ว{" "}
                   <span className="text-white font-bold">
-                    {selectedIds.size}
+                    {selectedIds.length}
                   </span>{" "}
                   รายการ
                 </span>
@@ -921,7 +898,7 @@ export default function AdminDestinationsPage() {
                       type: "delete",
                       ids: Array.from(selectedIds),
                       title: "Delete Destinations",
-                      message: `ยืนยันการลบสถานที่ท่องเที่ยว ${selectedIds.size} รายการอย่างถาวร?`,
+                      message: `ยืนยันการลบสถานที่ท่องเที่ยว ${selectedIds.length} รายการอย่างถาวร?`,
                     })
                   }
                   className="text-red-400 hover:text-red-300 px-2 py-1 rounded transition-colors"
@@ -930,7 +907,7 @@ export default function AdminDestinationsPage() {
                 </button>
                 <div className="w-px h-4 bg-zinc-700 ml-1" />
                 <button
-                  onClick={() => setSelectedIds(new Set())}
+                  onClick={() => setSelectedIds([])}
                   className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-full"
                   aria-label="Clear"
                 >
@@ -1008,14 +985,13 @@ export default function AdminDestinationsPage() {
                         }}
                         onDrop={handleDrop}
                         onClick={() => fileInputRef.current?.click()}
-                        className={`relative flex flex-col items-center justify-center w-full min-h-35 p-2 transition-all border border-dashed rounded-lg cursor-pointer overflow-hidden ${
-                          isDragging
+                        className={`relative flex flex-col items-center justify-center w-full min-h-35 p-2 transition-all border border-dashed rounded-lg cursor-pointer overflow-hidden ${isDragging
                             ? "border-zinc-500 bg-zinc-100/80"
                             : imagePreview.length > 0 ||
-                                formData.image_url.length > 0
+                              formData.image_url.length > 0
                               ? "border-transparent bg-zinc-50"
                               : "border-zinc-300 hover:border-zinc-400 bg-zinc-50/50 hover:bg-zinc-50"
-                        }`}
+                          }`}
                       >
                         <input
                           type="file"
@@ -1029,13 +1005,14 @@ export default function AdminDestinationsPage() {
                         />
                         <AnimatePresence mode="wait">
                           {imagePreview.length > 0 ||
-                          formData.image_url.length > 0 ? (
+                            formData.image_url.length > 0 ? (
                             <motion.div
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
                               className="relative w-full h-48 sm:h-56 rounded-md overflow-hidden group border border-zinc-200/50 shadow-sm"
                             >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={
                                   imagePreview.length > 0
@@ -1274,7 +1251,7 @@ export default function AdminDestinationsPage() {
           title="Delete Destination"
           message={
             <span className="text-zinc-500 text-xs block mt-1">
-              ยืนยันการลบ "{deleteConfirm?.name}" อย่างถาวร?
+              ยืนยันการลบ &quot;{deleteConfirm?.name}&quot; อย่างถาวร?
             </span>
           }
           confirmText="ลบข้อมูลถาวร"
