@@ -81,15 +81,28 @@ export const PUT = async (request: NextRequest, { params }: RouteParams) => {
       return NextResponse.json({ error: "Too many requests" }, { status: 429 });
     }
 
-    // 🔥 ตรวจสอบสิทธิ์ Admin แบบ Zero-Latency จาก Token
-    const isAdmin = user.app_metadata?.role === "admin";
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles") // ⚠️ เช็คให้ดีว่าในฐานข้อมูลชื่อ "profile" หรือ "profiles" (เติม s ไหม)
+      .select("role")
+      .eq("id", user.id) // สมมติว่าคอลัมน์เชื่อมโยงในตาราง profile ของคุณชื่อ "id" หรือ "user_id"
+      .single();
+
+    if (profileError || !profile) {
+      console.error("❌ Profile fetch error:", profileError?.message);
+      return NextResponse.json(
+        { error: "Forbidden: Profile not found" },
+        { status: 403 }
+      );
+    }
+
+    // ตรวจสอบว่าสิทธิ์ในตาราง profile เป็น admin หรือไม่
+    const isAdmin = profile.role === "admin";
     if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden: Admin only" },
         { status: 403 }
       );
     }
-
     const { id } = await params;
     const destinationId = Number(id);
 
@@ -160,7 +173,22 @@ export const DELETE = async (request: NextRequest, { params }: RouteParams) => {
     }
 
     // 🔥 ตรวจสอบสิทธิ์ Admin
-    const isAdmin = user.app_metadata?.role === "admin";
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles") // ⚠️ เช็คให้ดีว่าในฐานข้อมูลชื่อ "profile" หรือ "profiles" (เติม s ไหม)
+      .select("role")
+      .eq("id", user.id) // สมมติว่าคอลัมน์เชื่อมโยงในตาราง profile ของคุณชื่อ "id" หรือ "user_id"
+      .single();
+
+    if (profileError || !profile) {
+      console.error("❌ Profile fetch error:", profileError?.message);
+      return NextResponse.json(
+        { error: "Forbidden: Profile not found" },
+        { status: 403 }
+      );
+    }
+
+    // ตรวจสอบว่าสิทธิ์ในตาราง profile เป็น admin หรือไม่
+    const isAdmin = profile.role === "admin";
     if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden: Admin only" },

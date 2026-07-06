@@ -118,7 +118,6 @@ export const PUT = async (req: NextRequest, { params }: RouteContext) => {
       image_url: body.image_url,
       location: body.location,
       category: body.category,
-      updated_at: new Date().toISOString(),
     };
 
     // 🔥 ลบ key ที่เป็น undefined ออก เพื่อไม่ให้ไปเขียนทับค่าเดิมใน DB เป็น null โดยไม่ได้ตั้งใจ
@@ -126,18 +125,15 @@ export const PUT = async (req: NextRequest, { params }: RouteContext) => {
       (key) => updateData[key as keyof typeof updateData] === undefined && delete updateData[key as keyof typeof updateData]
     );
 
-    const isAdmin = user.app_metadata?.role === "admin";
+    // 👉 1. Initialize your DB client if needed (e.g., Supabase)
+    // const supabase = await createClient();
 
-    let query = supabaseAdmin.from("restaurants").update(updateData);
-
-    if (isAdmin) {
-      query = query.eq("id", numericId);
-    } else {
-      // ผู้ใช้ทั่วไปแก้ไขได้เฉพาะร้านที่ตัวเองเป็นคนสร้าง
-      query = query.eq("id", numericId).eq("created_by", user.id);
-    }
-
-    const { data, error } = await query.select().single();
+    const { data, error } = await supabaseAdmin
+      .from("restaurants") 
+      .update(updateData)
+      .eq("id", numericId)
+      .select()
+      .single();
 
     if (error) {
       if (error.code === "PGRST116") {
@@ -178,32 +174,53 @@ export const DELETE = async (_req: NextRequest, { params }: RouteContext) => {
     }
 
     const numericId = Number(id);
-    const isAdmin = user.app_metadata?.role === "admin";
+    const { data: restaurant, error: fetchError } = await supabaseAdmin
+      .from("restaurants")
+      .select("id, image_url") // ดึง image_url มาเผื่อต้องการลบไฟล์รูป
+      .eq("id", numericId)
+      .maybeSingle();
 
-    let query = supabaseAdmin.from("restaurants").delete();
+    if (fetchError) throw fetchError;
 
-    if (isAdmin) {
-      query = query.eq("id", numericId);
-    } else {
-      query = query.eq("id", numericId).eq("created_by", user.id);
+    if (!restaurant) {
+      return NextResponse.json({ error: "ไม่พบข้อมูลร้านอาหารในระบบ" }, { status: 404 });
     }
 
-    const { error, data } = await query.select('id');
+    const { error: deleteError } = await supabaseAdmin
+      .from("restaurants")
+      .delete()
+      .eq("id", numericId);
 
-    if (error) throw error;
+    if (deleteError) {
+      // ดักจับกรณีข้อมูลผูกกัน (Foreign Key Violation)
+      if (deleteError.code === "23503") {
+        return NextResponse.json(
+          { error: "ไม่สามารถลบได้เนื่องจากมีข้อมูลอื่นผูกอยู่ (เช่น รีวิว) กรุณาลบข้อมูลเหล่านั้นก่อน" }, 
+          { status: 400 }
+        );
+      }
+      throw deleteError;
+    }
 
-    if (!data || data.length === 0) {
-      return NextResponse.json(
-        { error: "ไม่พบร้านอาหาร หรือคุณไม่มีสิทธิ์ลบ" }, 
-        { status: 403 }
-      );
+    if (restaurant.image_url) {
+      const fileName = restaurant.image_url.split('/').pop();
+      if (fileName) {
+        await supabaseAdmin.storage.from('Images').remove([fileName]);
+      }
     }
 
     return NextResponse.json({ success: true, message: "ลบข้อมูลสำเร็จ" }, { status: 200 });
   } catch (error: any) {
     console.error("❌ DELETE Restaurant Error:", error);
+    
+    // 💡 ส่ง Error ออกไปให้เห็นเฉพาะตอนรันในเครื่อง (Development) เพื่อให้หาบั๊กง่ายขึ้น
+    const isDev = process.env.NODE_ENV === "development";
+    
     return NextResponse.json(
-      { error: error.message || "เกิดข้อผิดพลาดในการลบข้อมูล" }, 
+      { 
+        error: isDev ? `Server Error: ${error.message}` : "เกิดข้อผิดพลาดระดับเซิร์ฟเวอร์ในการลบข้อมูล",
+        debug: isDev ? error : undefined // ซ่อน debug ใน production
+      }, 
       { status: 500 }
     );
   }
