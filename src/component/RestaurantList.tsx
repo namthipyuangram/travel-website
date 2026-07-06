@@ -11,6 +11,8 @@ interface Restaurant {
   id: string;
   name: string;
   description: string;
+  min_price: number;
+  max_price: number;
   location: string;
   category: string;
   image_url: string | null;
@@ -43,7 +45,7 @@ export default function RestaurantList() {
   const [error, setError] = useState<string | null>(null);
 
   const categories = [
-    { value: "", label: "ทั้งหมด", icon: "🍽️" },
+    { value: "", label: "ทั้งหมด", icon: "🍽️"},
     { value: "คาเฟ่", label: "คาเฟ่", icon: "☕" },
     { value: "อาหารไทย", label: "อาหารไทย", icon: "🍜" },
     { value: "ร้านขนม", label: "ร้านขนม", icon: "🍰" },
@@ -97,7 +99,7 @@ export default function RestaurantList() {
           : defaultImage;
       }
     } catch (e) {
-      // ถ้า Parse ไม่ผ่าน แสดงว่าเป็น URL ปกติ
+      console.log("หารูปภาพไม่เจอ", e);
       return url;
     }
 
@@ -223,11 +225,10 @@ export default function RestaurantList() {
               <button
                 key={cat.value}
                 onClick={() => setCategory(cat.value)}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all active:scale-95 shrink-0 border flex items-center gap-2 ${
-                  isActive
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all active:scale-95 shrink-0 border flex items-center gap-2 ${isActive
                     ? "bg-neutral-900 text-white border-neutral-900 shadow-md"
                     : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50 hover:border-neutral-300"
-                }`}
+                  }`}
               >
                 <span>{cat.icon}</span>
                 {cat.label}
@@ -279,7 +280,7 @@ export default function RestaurantList() {
                   href={`/restaurant/${r.id}`}
                   className="block outline-none group h-full"
                 >
-                  <div className="bg-white rounded-3xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-100/60 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
+                  <div className="bg-white rounded-3xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.15)] border border-neutral-100 hover:shadow-[0_20px_40px_rgb(0,0,0,0.20)] hover:-translate-y-1.5 transition-all duration-500 ease-out h-full flex flex-col">
                     {/* Image Section */}
                     <div className="relative w-full aspect-4/3 rounded-[1.25rem] overflow-hidden mb-4 bg-neutral-100">
                       <Image
@@ -316,6 +317,10 @@ export default function RestaurantList() {
                       </h4>
                       <p className="text-sm text-neutral-500 line-clamp-2 mb-4 grow leading-relaxed">
                         {r.description}
+                      </p>
+                      <p className="text-xs font-bold text-neutral-800 line-clamp-2 mb-4 grow leading-relaxed">
+                        {r.min_price} -{" "}
+                        {r.max_price} บาท
                       </p>
 
                       <div className="pt-3 border-t border-neutral-100 flex items-center justify-between mt-auto">

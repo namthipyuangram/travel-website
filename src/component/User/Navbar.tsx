@@ -20,7 +20,7 @@ import { ProfileModal } from "../ProfileModal";
 
 const navItems = [
   { name: "หน้าแรก", href: "/dashboard" },
-  { name: "สถานที่ท่องเที่ยว", href: "/sdestinations" },
+  { name: "สถานที่ท่องเที่ยว", href: "/destinations" },
   { name: "ของกิน", href: "/restaurant" },
   { name: "ที่พัก", href: "/accommodations" },
   { name: "ทริปเที่ยวของฉัน", href: "/trips" }

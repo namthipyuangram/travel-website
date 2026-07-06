@@ -24,7 +24,7 @@ interface AuthScreenProps {
 
 const IMAGES: Record<AuthState, string> = {
   login:
-    "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop",
+    "/images/korat.png",
   signup:
     "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=2070&auto=format&fit=crop",
   otp: "https://images.unsplash.com/photo-1488085061387-422e29b40080?q=80&w=2062&auto=format&fit=crop",
